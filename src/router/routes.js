@@ -16,7 +16,7 @@ const routes = [
       {
         path: '/manage-profile',
         name: 'Profile',
-        component: () => import('pages/Manageprofile.vue'),
+        component: () => import('pages/ManageProfile.vue'),
       },
       {
         path: '/usermanager',
