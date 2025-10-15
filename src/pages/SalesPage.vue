@@ -148,9 +148,9 @@
           <div class="q-mb-md">
             <div class="text-subtitle2 text-white q-mb-sm">{{ $t('products') }}</div>
 
+            <!-- Row 1: Product Select -->
             <div class="row q-col-gutter-sm q-mb-sm">
-              <!-- Product Select -->
-              <div class="col-6 q-mb-sm">
+              <div class="col-12">
                 <div class="text-caption text-white q-mb-xs">{{ $t('selectProduct') }}</div>
                 <q-select
                   v-model="selectedProductCode"
@@ -163,30 +163,34 @@
                   map-options
                   use-input
                   input-debounce="300"
-                  class="white-input full-width"
-                  input-class="text-white text-bold text-center"
+                  class="black-input full-width"
+                  input-class="text-green-14 text-bold text-center"
                   popup-content-class="text-white bg-dark"
                   @filter="filterProducts"
                   @update:model-value="updateSelectedProduct"
                 />
               </div>
+            </div>
 
+            <!-- Row 2: Quantity, Price, BV, Add Button -->
+            <!-- Row 2: Quantity, Price, BV -->
+            <div class="row q-col-gutter-sm q-mb-sm">
               <!-- Quantity -->
-              <div class="col-2 q-mb-sm">
+              <div class="col-4">
                 <div class="text-caption text-white q-mb-xs">{{ $t('qty') }}</div>
                 <q-input
                   v-model.number="selectedQuantity"
                   type="number"
                   dense
                   outlined
-                  class="white-input"
+                  class="white-input full-width"
                   input-class="text-white text-bold text-center"
                   @update:model-value="updateTotals"
                 />
               </div>
 
               <!-- Total Price -->
-              <div class="col-2 q-mb-sm">
+              <div class="col-4">
                 <div class="text-caption text-white q-mb-xs">{{ $t('price') }}</div>
                 <q-input
                   :model-value="totalPrice"
@@ -194,13 +198,13 @@
                   dense
                   outlined
                   readonly
-                  class="white-input"
+                  class="white-input full-width"
                   input-class="text-white text-bold text-center"
                 />
               </div>
 
               <!-- Total BV -->
-              <div class="col-2 q-mb-sm">
+              <div class="col-4">
                 <div class="text-caption text-white q-mb-xs">{{ $t('bv') }}</div>
                 <q-input
                   :model-value="totalBV"
@@ -208,13 +212,15 @@
                   dense
                   outlined
                   readonly
-                  class="white-input"
+                  class="white-input full-width"
                   input-class="text-white text-bold text-center"
                 />
               </div>
+            </div>
 
-              <!-- Add Product Button -->
-              <div class="col-12">
+            <!-- Row 3: Add Product Button -->
+            <div class="row q-mb-sm">
+              <div class="col-12 flex items-end">
                 <q-btn
                   icon="shopping_cart"
                   color="primary"
@@ -230,7 +236,7 @@
               <q-item
                 v-for="(product, index) in form.items"
                 :key="index"
-                class="q-py-xs items-start"
+                class="q-py-xs items-start custom-item-separator"
               >
                 <q-item-section>
                   <div class="text-subtitle2 text-white text-semi-bold">
@@ -496,7 +502,8 @@ const selectDistributor = (distributor) => {
   filteredDistributors.value = []
 
   // Optional: refocus the input
-  document.querySelector('.search-input').focus()
+  //document.querySelector('.search-input').focus()
+  document.querySelector('.search-input')?.focus()
 }
 
 const totalReceiptAmount = computed(() => {
@@ -636,7 +643,8 @@ const submitSale = async () => {
     if (!form.receiptno || !form.salesdate || !form.distributoridno) {
       $q.notify({
         type: 'negative',
-        message: 'Please fill all required header fields.',
+
+        message: $t('fillRequiredHeader'),
         position: 'top',
       })
       return
@@ -646,7 +654,8 @@ const submitSale = async () => {
     if (!form.items || form.items.length === 0) {
       $q.notify({
         type: 'negative',
-        message: 'You must add at least one product before submitting.',
+
+        message: $t('addAtLeastOneProduct'),
         position: 'top',
       })
       return
@@ -663,7 +672,8 @@ const submitSale = async () => {
     // ✅ Notify success
     $q.notify({
       type: 'positive',
-      message: 'Sale submitted successfully!',
+
+      message: $t('saleSubmitted'),
       position: 'top',
     })
 
@@ -894,5 +904,12 @@ watch(
   background-position: right 10px center;
   background-size: 16px;
   padding-right: 32px; /* make room for arrow */
+}
+.custom-list {
+  border-color: white !important; /* Makes outer border white */
+}
+
+.custom-item-separator:not(:last-child) {
+  border-bottom: 1px solid white !important; /* Adds white line between items */
 }
 </style>

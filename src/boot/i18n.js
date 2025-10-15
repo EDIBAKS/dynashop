@@ -94,6 +94,9 @@ const messages = {
     cancel: 'No, keep it',
     lastmodified: 'Last Modification',
     flaggedSales: 'Flagged Sales',
+    fillRequiredHeader: 'Please fill all required header fields.',
+    addAtLeastOneProduct: 'You must add at least one product before submitting.',
+    saleSubmitted: 'Sales entry successful.',
   },
   fr: {
     sales: 'Ventes',
@@ -184,6 +187,9 @@ const messages = {
     cancel: 'Non, le conserver',
     lastmodified: 'Dernière modification',
     flaggedSales: 'Ventes signalées',
+    fillRequiredHeader: 'Please fill all required header fields.',
+    saleSubmitted: 'Entrée de vente réussie.',
+    addAtLeastOneProduct: 'Vous devez ajouter au moins un produit avant de soumettre.',
   },
 }
 
