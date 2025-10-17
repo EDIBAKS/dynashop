@@ -20,16 +20,17 @@
               Only SuperAdmins can create new users.
             </q-banner>
           </div>
+
           <q-form @submit.prevent="createUser">
             <q-input
-              v-model="createForm.names"
-              label="Full Name"
+              v-model="createForm.firstname"
+              label="First Name"
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
             <q-input
-              v-model="createForm.username"
-              label="Username"
+              v-model="createForm.lastname"
+              label="Last Name"
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
@@ -47,20 +48,78 @@
               class="q-mb-sm"
             />
             <q-input
-              v-model="createForm.department"
-              label="Department"
+              v-model="createForm.address"
+              label="Address"
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
             <q-input
-              v-model="createForm.role"
-              label="Role"
+              v-model="createForm.dob"
+              label="Date of Birth"
+              type="date"
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
+
+            <q-input
+              v-model="createForm.country_code"
+              label="Country Code"
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Province Select -->
+            <q-select
+              v-model="createForm.province_code"
+              :options="provinces"
+              label="Province"
+              option-label="name"
+              option-value="province_code"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- DPC Select -->
+            <q-select
+              v-model="createForm.dpc_id"
+              :options="dpcs"
+              label="DPC"
+              option-label="dpcname"
+              option-value="dpccode"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Role Select -->
+            <q-select
+              v-model="createForm.role"
+              :options="roles"
+              label="Role"
+              option-label="name"
+              option-value="name"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Password -->
             <q-input
               v-model="createForm.password"
               label="Password"
+              type="password"
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Confirm Password -->
+            <q-input
+              v-model="createForm.confirmPassword"
+              label="Repeat Password"
               type="password"
               :disable="!isSuperAdmin"
               class="q-mb-sm"
@@ -78,28 +137,140 @@
 
         <!-- Edit Profile Panel -->
         <q-tab-panel name="edit">
+          <!-- Super Admin Table -->
+          <div v-if="isSuperAdmin" class="q-mb-md">
+            <q-card flat bordered class="q-pa-sm">
+              <div class="text-h6 q-mb-md">Manage Users</div>
+
+              <q-table
+                :rows="allUsers"
+                :columns="columns"
+                row-key="userid"
+                flat
+                bordered
+                dense
+                @row-click="loadUserToEdit"
+              >
+                <template v-slot:top-right>
+                  <q-btn label="Reload Users" color="primary" dense flat @click="loadAllUsers" />
+                </template>
+
+                <template v-slot:body="props">
+                  <q-tr :props="props" class="cursor-pointer hover:bg-grey-2">
+                    <q-td>{{ props.row.firstname }} {{ props.row.lastname }}</q-td>
+                    <q-td>{{ props.row.role }}</q-td>
+                    <q-td>{{ props.row.dpc_id }}</q-td>
+                    <q-td>{{ props.row.email }}</q-td>
+                    <q-td>
+                      <q-btn
+                        dense
+                        flat
+                        color="primary"
+                        label="Edit"
+                        @click.stop="loadUserToEdit(props.row)"
+                      />
+                    </q-td>
+                  </q-tr>
+                </template>
+              </q-table>
+            </q-card>
+          </div>
+
+          <!-- Profile Edit Form -->
           <q-form @submit.prevent="updateProfile">
-            <q-input v-model="editForm.names" label="Full Name" class="q-mb-sm" />
-            <q-input v-model="editForm.username" label="Username" class="q-mb-sm" />
+            <!-- Basic Info -->
+            <q-input v-model="editForm.firstname" label="First Name" class="q-mb-sm" />
+            <q-input v-model="editForm.lastname" label="Last Name" class="q-mb-sm" />
+            <q-input v-model="editForm.email" label="Email" disable class="q-mb-sm" />
             <q-input v-model="editForm.telephone" label="Telephone" class="q-mb-sm" />
-            <q-input v-model="editForm.department" label="Department" class="q-mb-sm" />
+            <q-input v-model="editForm.address" label="Address" class="q-mb-sm" />
+            <q-input v-model="editForm.dob" label="Date of Birth" type="date" class="q-mb-sm" />
 
-            <q-separator class="q-my-md" />
-
+            <!-- Country -->
             <q-input
-              v-model="editForm.newPassword"
-              label="New Password"
-              type="password"
-              class="q-mb-sm"
-            />
-            <q-input
-              v-model="editForm.confirmPassword"
-              label="Confirm Password"
-              type="password"
+              v-model="editForm.country_code"
+              label="Country Code"
+              :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
 
+            <!-- Province -->
+            <q-select
+              v-model="editForm.province_code"
+              :options="provinces"
+              label="Province"
+              option-label="name"
+              option-value="province_code"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- DPC -->
+            <q-select
+              v-model="editForm.dpc_id"
+              :options="dpcs"
+              label="DPC"
+              option-label="dpcname"
+              option-value="dpccode"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Role -->
+            <q-select
+              v-model="editForm.role"
+              :options="roles"
+              label="Role"
+              option-label="name"
+              option-value="name"
+              emit-value
+              map-options
+              :disable="!isSuperAdmin"
+              class="q-mb-sm"
+            />
+
+            <!-- Password (only visible if user edits own profile) -->
+            <!-- Password Section -->
+            <!-- Visible when:
+  - Regular user edits own profile
+  - OR SuperAdmin edits their own profile (no selected user OR selectedUser is self)
+-->
+            <div
+              v-if="
+                !isSuperAdmin ||
+                (isSuperAdmin && (!selectedUser || selectedUser.userid === auth.user.id))
+              "
+            >
+              <q-input
+                v-model="editForm.newPassword"
+                label="New Password"
+                type="password"
+                class="q-mb-sm"
+              />
+              <q-input
+                v-model="editForm.confirmPassword"
+                label="Confirm Password"
+                type="password"
+                class="q-mb-sm"
+              />
+            </div>
+
+            <!-- Submit -->
             <q-btn label="Update Profile" type="submit" color="primary" class="q-mt-md" />
+
+            <!-- Delete button (SuperAdmin only, and not for self) -->
+            <q-btn
+              v-if="isSuperAdmin && selectedUser?.userid !== auth.user.id"
+              label="Delete User"
+              color="negative"
+              icon="delete"
+              class="q-mt-md q-ml-sm"
+              @click="confirmDeleteUser(selectedUser.userid)"
+            />
           </q-form>
         </q-tab-panel>
       </q-tab-panels>
@@ -113,121 +284,305 @@ import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuth } from 'stores/auth'
 import { supabase } from 'boot/supabase'
-
+import { useI18n } from 'vue-i18n'
+const { t: $t } = useI18n()
 const $q = useQuasar()
 const router = useRouter()
 const auth = useAuth()
+const columns = [
+  {
+    name: 'name',
+    label: 'Name',
+    field: (row) => `${row.firstname} ${row.lastname}`,
+    align: 'left',
+  },
+  { name: 'role', label: 'Role', field: 'role', align: 'left' },
+  { name: 'dpc_id', label: 'DPC', field: 'dpc_id', align: 'left' },
+  { name: 'email', label: 'Email', field: 'email', align: 'left' },
+  { name: 'actions', label: 'Actions', field: 'actions', align: 'center' },
+]
 
 const tab = ref('create')
 
+// Dropdown options
+const provinces = ref([])
+const dpcs = ref([])
+const roles = ref([])
+
+// ✅ Fetch DPC, Province, and Role options from Supabase
+async function loadDropdownData() {
+  try {
+    // Fetch province, DPC, and roles in parallel
+    const [provinceRes, dpcRes, roleRes] = await Promise.all([
+      supabase.from('province').select('province_code, name'),
+      supabase.from('dpc').select('dpccode, dpcname'),
+      supabase.from('roles').select('name'),
+    ])
+
+    // Assign fetched data or empty array if null
+    provinces.value = provinceRes.data || []
+    dpcs.value = dpcRes.data || []
+    roles.value = roleRes.data || []
+  } catch (error) {
+    console.error('Error loading dropdown data:', error)
+    $q.notify({ type: 'negative', message: 'Error loading dropdown data' })
+  }
+}
+
+// CREATE FORM
 const createForm = ref({
-  names: '',
-  username: '',
+  firstname: '',
+  lastname: '',
   email: '',
   telephone: '',
+  address: '',
+  dob: '',
+  country_code: '',
+  province_code: '',
+  dpc_id: '',
   role: '',
-  department: '',
   password: '',
 })
 
+// EDIT FORM
 const editForm = ref({
-  names: '',
-  username: '',
+  firstname: '',
+  lastname: '',
+  email: '',
   telephone: '',
-  department: '',
+  address: '',
+  dob: '',
+  country_code: '',
+  province_code: '',
+  dpc_id: '',
+  role: '',
   newPassword: '',
   confirmPassword: '',
 })
 
-// On mount, populate editForm from userDetails
-onMounted(() => {
-  if (auth.userDetails) {
+const logoutAndRedirect = async () => {
+  await auth.logout() // calls Pinia logout, clears session
+  window.location.href = '/' // redirect to login page
+}
+// Fetch current user data
+onMounted(async () => {
+  try {
+    const user = auth.user
+    if (!user) return
+    if (isSuperAdmin.value) loadAllUsers()
+
+    await loadDropdownData()
+
+    const { data, error } = await supabase
+      .from('shopusers')
+      .select('*')
+      .eq('userid', user.id)
+      .single()
+
+    if (error) throw error
+
     editForm.value = {
-      names: auth.userDetails.names,
-      username: auth.userDetails.username,
-      telephone: auth.userDetails.telephone,
-      department: auth.userDetails.department,
+      ...data,
       newPassword: '',
       confirmPassword: '',
     }
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to load profile: ' + err.message })
   }
 })
 
-// Computed role check
+// Computed
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
 
 // Navigation
 const goBack = () => router.push('/')
 
-// Create user logic
-const createUser = async () => {
+async function createUser() {
+  if (createForm.value.password !== createForm.value.confirmPassword) {
+    $q.notify({ type: 'negative', message: 'Passwords do not match' })
+    return
+  }
+
   try {
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    // Create auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: createForm.value.email,
       password: createForm.value.password,
     })
+    if (authError) throw authError
 
-    if (signUpError) throw signUpError
-    const newUserId = signUpData.user.id
+    const userId = authData.user.id
 
-    const { error: insertError } = await supabase.from('users').insert({
-      id: newUserId,
-      names: createForm.value.names,
-      username: createForm.value.username,
-      telephone: createForm.value.telephone,
-      role: createForm.value.role,
-      department: createForm.value.department,
-      email: createForm.value.email,
-    })
+    // Insert into shopusers
+    const { error } = await supabase.from('shopusers').insert([
+      {
+        userid: userId,
+        firstname: createForm.value.firstname,
+        lastname: createForm.value.lastname,
+        email: createForm.value.email,
+        telephone: createForm.value.telephone,
+        address: createForm.value.address,
+        dob: createForm.value.dob,
+        country_code: createForm.value.country_code,
+        province_code: createForm.value.province_code,
+        dpc_id: createForm.value.dpc_id,
+        role: createForm.value.role,
+      },
+    ])
+    if (error) throw error
 
-    if (insertError) throw insertError
-
-    $q.notify({ type: 'positive', message: 'User created successfully' })
-    router.push('/')
+    $q.notify({ type: 'positive', message: 'User created successfully!' })
+    resetForm()
   } catch (err) {
     $q.notify({ type: 'negative', message: err.message })
   }
 }
 
-// Update current profile
+function resetForm() {
+  createForm.value = {
+    firstname: '',
+    lastname: '',
+    email: '',
+    telephone: '',
+    address: '',
+    dob: '',
+    country_code: '',
+    province_code: '',
+    dpc_id: '',
+    role: '',
+    password: '',
+  }
+}
 
 const updateProfile = async () => {
   try {
-    // Step 1: Update user details in `users` table
-    await auth.updateProfile({
-      names: editForm.value.names,
-      username: editForm.value.username,
-      telephone: editForm.value.telephone,
-      department: editForm.value.department,
-    })
+    const currentUserId = auth.user?.id
+    if (!currentUserId) throw new Error('No logged-in user.')
 
-    // Step 2: If password is being changed
-    if (editForm.value.newPassword) {
+    const targetUserId =
+      isSuperAdmin.value && selectedUser.value
+        ? selectedUser.value.userid // SuperAdmin editing another user
+        : currentUserId // Editing self
+
+    // 1️⃣ Update general user info
+    const { error: updateError } = await supabase
+      .from('shopusers')
+      .update({
+        firstname: editForm.value.firstname,
+        lastname: editForm.value.lastname,
+        telephone: editForm.value.telephone,
+        address: editForm.value.address,
+        dob: editForm.value.dob,
+        country_code: editForm.value.country_code,
+        province_code: editForm.value.province_code,
+        dpc_id: editForm.value.dpc_id,
+        role: editForm.value.role,
+      })
+      .eq('userid', targetUserId)
+
+    if (updateError) throw updateError
+
+    // 2️⃣ Determine if editing own profile
+    const isEditingSelf = targetUserId === currentUserId
+
+    // 3️⃣ Handle password change — only for self
+    if (isEditingSelf && editForm.value.newPassword) {
       if (editForm.value.newPassword !== editForm.value.confirmPassword) {
-        $q.notify({ type: 'negative', message: 'Passwords do not match' })
+        $q.notify({ type: 'negative', message: 'Passwords do not match.' })
         return
       }
 
-      // Update password in Supabase Auth
+      // Use auth store method to update password
       await auth.updatePassword(editForm.value.newPassword)
 
       $q.notify({
         type: 'positive',
-        message: 'Password changed successfully. Please log in again.',
+        message: 'Password changed successfully. You will be logged out.',
       })
 
-      // Log out and redirect to login page
-      await auth.logout()
-      router.push('/')
+      await logoutAndRedirect()
       return
     }
 
-    // If only profile is updated
-    $q.notify({ type: 'positive', message: 'Profile updated successfully' })
-    router.push('/')
+    // 4️⃣ Notifications
+    if (isSuperAdmin.value && selectedUser.value && !isEditingSelf) {
+      // SuperAdmin updated another user
+      $q.notify({
+        type: 'positive',
+        message: `User ${editForm.value.firstname} ${editForm.value.lastname} updated successfully.`,
+      })
+      await loadAllUsers()
+    } else {
+      // Self update (info only)
+      $q.notify({
+        type: 'positive',
+        message: $t('profileUpdatedLogout'),
+      })
+      setTimeout(async () => {
+        await logoutAndRedirect()
+      }, 2000)
+    }
   } catch (err) {
     $q.notify({ type: 'negative', message: err.message })
   }
+}
+const confirmDeleteUser = (userId) => {
+  $q.dialog({
+    title: 'Confirm Delete',
+    message: 'Are you sure you want to delete this user? This action cannot be undone.',
+    cancel: true,
+    persistent: true,
+  }).onOk(() => deleteUser(userId))
+}
+
+const deleteUser = async (userId) => {
+  try {
+    const { error } = await supabase.from('shopusers').delete().eq('userid', userId)
+    if (error) throw error
+
+    $q.notify({
+      type: 'positive',
+      message: 'User deleted successfully.',
+    })
+
+    await loadAllUsers()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.message })
+  }
+}
+
+// SuperAdmin: list of all users
+const allUsers = ref([])
+
+// Load all users
+async function loadAllUsers() {
+  const { data, error } = await supabase
+    .from('shopusers')
+    .select('*')
+    .order('firstname', { ascending: true })
+
+  if (error) {
+    console.error(error)
+  } else {
+    allUsers.value = data
+  }
+}
+
+const selectedUser = ref(null) // track the clicked user
+
+// when a row is clicked
+function loadUserToEdit(user) {
+  selectedUser.value = user
+  editForm.value = {
+    ...editForm.value,
+    ...user,
+    newPassword: '',
+    confirmPassword: '',
+  }
+  $q.notify({
+    type: 'info',
+    message: `Loaded ${user.firstname} ${user.lastname} for editing`,
+  })
 }
 </script>
 

@@ -153,22 +153,27 @@
               <div class="col-12">
                 <div class="text-caption text-white q-mb-xs">{{ $t('selectProduct') }}</div>
                 <q-select
+                  filled
                   v-model="selectedProductCode"
-                  :options="filteredProducts"
-                  option-label="label"
-                  option-value="value"
-                  dense
-                  outlined
-                  emit-value
-                  map-options
                   use-input
                   input-debounce="300"
-                  class="black-input full-width"
-                  input-class="text-green-14 text-bold text-center"
+                  :label="$t('selectProduct')"
+                  :options="filteredProducts"
+                  emit-value
+                  map-options
+                  class="full-width bg-light-green-14"
+                  style="border-radius: 7px"
+                  input-class="text-white text-bold text-center"
                   popup-content-class="text-white bg-dark"
                   @filter="filterProducts"
                   @update:model-value="updateSelectedProduct"
-                />
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-grey"> No results </q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
               </div>
             </div>
 
@@ -275,6 +280,9 @@
                 <span>{{ totalReceiptBv }}</span>
               </div>
             </div>
+          </div>
+          <div v-if="loading" class="q-mt-md flex flex-center">
+            <q-spinner-hourglass color="light-green" size="50px" />
           </div>
 
           <!-- Submit Button -->
@@ -478,7 +486,15 @@ const validateDistributorIDNO = async () => {
   if (error || !data) {
     console.log('Error:', error)
     console.log('Data:', data)
-    distributorError.value = 'Distributor ID not found.'
+
+    $q.notify({
+      type: 'negative',
+      message: $t('distributorNotFound'),
+      position: 'center', // 👈 show notification in center
+      timeout: 2500, // optional: how long it stays
+      classes: 'text-center text-h6', // optional: make it easy to read
+    })
+
     form.distributoridno = ''
     searchQuery.value = ''
     confirmedDistributor.value = false
@@ -584,7 +600,9 @@ const validateReceiptNo = async () => {
     $q.notify({
       type: 'negative',
       message: $t('receiptInvalidChars'),
-      position: 'top',
+      position: 'center', // 👈 centers the notification on screen
+      timeout: 2000, // optional: how long it stays visible (default 2500ms)
+      classes: 'text-center text-h6', // optional: make text clearer/larger
     })
     form.receiptno = ''
     return
@@ -624,7 +642,7 @@ const validateReceiptNo = async () => {
         distributorid: distributoridno,
       }),
       timeout: 6500,
-      position: 'top',
+      position: 'center',
     })
 
     form.receiptno = ''
@@ -645,7 +663,7 @@ const submitSale = async () => {
         type: 'negative',
 
         message: $t('fillRequiredHeader'),
-        position: 'top',
+        position: 'center',
       })
       return
     }
@@ -656,7 +674,7 @@ const submitSale = async () => {
         type: 'negative',
 
         message: $t('addAtLeastOneProduct'),
-        position: 'top',
+        position: 'center',
       })
       return
     }
@@ -674,7 +692,7 @@ const submitSale = async () => {
       type: 'positive',
 
       message: $t('saleSubmitted'),
-      position: 'top',
+      position: 'center',
     })
 
     // ✅ Reset form after submission, preserve exchangeRate
@@ -702,7 +720,7 @@ const submitSale = async () => {
     $q.notify({
       type: 'negative',
       message: `Error submitting sale: ${err.message || err}`,
-      position: 'top',
+      position: 'center',
     })
   } finally {
     loading.value = false
@@ -911,5 +929,8 @@ watch(
 
 .custom-item-separator:not(:last-child) {
   border-bottom: 1px solid white !important; /* Adds white line between items */
+}
+.q-field__native {
+  text-align: center !important;
 }
 </style>

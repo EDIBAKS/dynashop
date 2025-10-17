@@ -55,6 +55,17 @@
         />
       </q-card>
     </div>
+    <!-- ✅ Bottom-left footer content -->
+    <div
+      class="row items-center q-gutter-sm text-white"
+      style="position: absolute; bottom: 31px; left: 16px; z-index: 10; opacity: 0.9"
+    >
+      <q-icon name="copyright" size="20px" class="text-white" />
+      <div class="text-subtitle2">
+        <span class="text-light-green-14">Alvin</span>
+        <span class="text-white">Concepts</span>
+      </div>
+    </div>
   </q-page>
 </template>
 

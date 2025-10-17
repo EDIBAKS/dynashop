@@ -82,7 +82,7 @@ const messages = {
     saleUpdated: 'Sale updated!',
     salesPerDay: 'Sales Per Day',
     online: 'Online',
-    slogan: 'Your smart POS partner',
+    slogan: 'Your smart POS',
     loginSuccess: 'Login successful!',
     loginFailed: 'Login failed',
     email: 'Email',
@@ -97,6 +97,14 @@ const messages = {
     fillRequiredHeader: 'Please fill all required header fields.',
     addAtLeastOneProduct: 'You must add at least one product before submitting.',
     saleSubmitted: 'Sales entry successful.',
+    distributorNotFound: 'Distributor ID not found.',
+    home: 'Home',
+    salesPage: 'Sales',
+    reportsPage: 'Reports',
+    stock: 'Stock',
+    profile: 'Profile',
+    profileUpdatedLogout:
+      'Profile updated successfully. You will be logged out to capture changes.',
   },
   fr: {
     sales: 'Ventes',
@@ -190,6 +198,14 @@ const messages = {
     fillRequiredHeader: 'Please fill all required header fields.',
     saleSubmitted: 'Entrée de vente réussie.',
     addAtLeastOneProduct: 'Vous devez ajouter au moins un produit avant de soumettre.',
+    distributorNotFound: 'Identifiant du distributeur introuvable.',
+    home: 'Accueil',
+    salesPage: 'Ventes',
+    reportsPage: 'Rapports',
+    stock: 'Stock',
+    profile: 'Profil',
+    profileUpdatedLogout:
+      'Profil mis à jour avec succès. Vous serez déconnecté pour appliquer les modifications.',
   },
 }
 

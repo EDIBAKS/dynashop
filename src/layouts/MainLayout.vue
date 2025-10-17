@@ -1,8 +1,8 @@
 <template>
   <q-layout view="hHh lpR fFf" class="q-safe-area">
     <!-- Minimal Transparent Header -->
-    <q-header class="bg-blue-grey-10 text-white q-pa-sm q-safe-area-top" elevated height-hint="60">
-      <div class="row items-center justify-between q-pa-sm" style="height: 80px">
+    <q-header class="bg-blue-grey-10 text-white q-safe-area-top" elevated height-hint="95">
+      <div class="row items-center justify-between q-pa-sm" style="height: 80px; padding-top: 35px">
         <!-- Left: Logo / Title -->
         <div class="row items-center no-wrap q-gutter-sm">
           <q-avatar size="36px" class="bg-green-14">
@@ -145,8 +145,8 @@
     <!-- Transparent Footer -->
     <q-footer class="bg-blue-grey-10 text-white q-safe-area-bottom" elevated>
       <div
-        class="row items-center justify-between q-pl-sm q-pr-sm q-pt-sm q-pb-sm"
-        style="min-height: 85px"
+        class="row items-center justify-between q-pl-sm q-pr-sm q-pt-sm"
+        style="min-height: 85px; padding-bottom: 20px"
       >
         <!-- Left: Copyright -->
         <div class="row items-center q-gutter-sm">
@@ -157,16 +157,24 @@
           </div>
         </div>
 
-        <!-- Right: Logout Icon -->
-        <q-btn
-          dense
-          round
-          flat
-          color="white"
-          icon="exit_to_app"
-          class="hover-scale"
-          @click="logout"
-        />
+        <!-- Current Page Title + Logout -->
+        <div class="row items-center q-gutter-sm">
+          <!-- Page title -->
+          <div class="text-subtitle2 text-white q-mr-md">
+            {{ pageTitle }}
+          </div>
+
+          <!-- Logout button -->
+          <q-btn
+            dense
+            round
+            flat
+            color="white"
+            icon="exit_to_app"
+            class="hover-scale"
+            @click="logout"
+          />
+        </div>
       </div>
     </q-footer>
   </q-layout>
@@ -179,8 +187,10 @@ import { useAuth } from 'stores/auth'
 import { useRouter } from 'vue-router'
 const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 const auth = useAuth()
+import { useRoute } from 'vue-router'
 const router = useRouter()
-
+const route = useRoute()
+const { t: $t } = useI18n()
 const fabOpen = ref(false)
 const { locale } = useI18n()
 
@@ -192,7 +202,24 @@ const wallpaperStyle = {
   backgroundPosition: 'center center',
   minHeight: '100dvh', // dynamic viewport height (safe for mobile)
 }
-
+const pageTitle = computed(() => {
+  switch (route.name) {
+    case 'home':
+      return $t('home')
+    case 'sales':
+      return $t('salesPage')
+    case 'reports':
+      return $t('reportsPage')
+    case 'stock':
+      return $t('stock')
+    case 'profile':
+      return $t('profile')
+    default:
+      return route.name || ''
+  }
+})
+// Compute the current page title
+//const pageTitle = computed(() => pageTitles[route.name] || route.name || '')
 const goToProfile = () => router.push('/manage-profile')
 const toggleLanguage = () => {
   locale.value = locale.value === 'fr' ? 'en' : 'fr'

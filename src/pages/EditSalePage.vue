@@ -39,6 +39,8 @@
           label="DPC"
           dense
           outlined
+          emit-value
+          map-options
           class="q-mt-md"
         />
         <q-input
@@ -291,10 +293,12 @@ onMounted(async () => {
     .select('dpccode, dpcname')
     .order('dpcname')
 
-  if (!dpcError) dpcs.value = dpcData
+  if (!dpcError && dpcData) {
+    dpcs.value = dpcData
+  }
 
-  // Preselect the sale's current DPC
-  if (sale) {
+  // Preselect the sale's current DPC (if editing existing sale)
+  if (sale && sale.dpccode) {
     form.value.dpccode = sale.dpccode
   }
 })
