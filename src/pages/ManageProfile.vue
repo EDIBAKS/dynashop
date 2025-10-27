@@ -61,9 +61,14 @@
               class="q-mb-sm"
             />
 
-            <q-input
+            <q-select
               v-model="createForm.country_code"
-              label="Country Code"
+              :options="countries"
+              label="Country"
+              option-label="name"
+              option-value="code"
+              emit-value
+              map-options
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
@@ -187,9 +192,14 @@
             <q-input v-model="editForm.dob" label="Date of Birth" type="date" class="q-mb-sm" />
 
             <!-- Country -->
-            <q-input
+            <q-select
               v-model="editForm.country_code"
-              label="Country Code"
+              :options="countries"
+              label="Country"
+              option-label="name"
+              option-value="code"
+              emit-value
+              map-options
               :disable="!isSuperAdmin"
               class="q-mb-sm"
             />
@@ -279,7 +289,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuth } from 'stores/auth'
@@ -303,33 +313,17 @@ const columns = [
 ]
 
 const tab = ref('create')
-
-// Dropdown options
+const countries = ref([])
 const provinces = ref([])
 const dpcs = ref([])
 const roles = ref([])
+const allUsers = ref([])
+const selectedUser = ref(null)
 
-// ✅ Fetch DPC, Province, and Role options from Supabase
-async function loadDropdownData() {
-  try {
-    // Fetch province, DPC, and roles in parallel
-    const [provinceRes, dpcRes, roleRes] = await Promise.all([
-      supabase.from('province').select('province_code, name'),
-      supabase.from('dpc').select('dpccode, dpcname'),
-      supabase.from('roles').select('name'),
-    ])
-
-    // Assign fetched data or empty array if null
-    provinces.value = provinceRes.data || []
-    dpcs.value = dpcRes.data || []
-    roles.value = roleRes.data || []
-  } catch (error) {
-    console.error('Error loading dropdown data:', error)
-    $q.notify({ type: 'negative', message: 'Error loading dropdown data' })
-  }
-}
-
-// CREATE FORM
+// ------------------- COMPUTED -------------------
+const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
+const isAdmin = computed(() => auth.userDetails?.role === 'Admin')
+// ------------------- FORMS -------------------
 const createForm = ref({
   firstname: '',
   lastname: '',
@@ -342,9 +336,9 @@ const createForm = ref({
   dpc_id: '',
   role: '',
   password: '',
+  confirmPassword: '',
 })
 
-// EDIT FORM
 const editForm = ref({
   firstname: '',
   lastname: '',
@@ -360,39 +354,119 @@ const editForm = ref({
   confirmPassword: '',
 })
 
+//- DATA LOADERS -------------------
+async function loadCountries() {
+  try {
+    const { data, error } = await supabase.from('country').select('code, name')
+    if (error) throw error
+    countries.value = data || []
+  } catch (err) {
+    console.error('Error loading countries:', err)
+    $q.notify({ type: 'negative', message: 'Failed to load countries' })
+  }
+}
+
+async function loadProvinces(countryCode) {
+  try {
+    if (!countryCode) {
+      provinces.value = []
+      dpcs.value = []
+      return
+    }
+    const { data, error } = await supabase
+      .from('province')
+      .select('province_code, name')
+      .eq('country_code', countryCode)
+    if (error) throw error
+    provinces.value = data || []
+    dpcs.value = []
+  } catch (err) {
+    console.error('Error loading provinces:', err)
+    $q.notify({ type: 'negative', message: 'Failed to load provinces' })
+  }
+}
+
+async function loadDPCs(provinceCode) {
+  try {
+    if (!provinceCode) {
+      dpcs.value = []
+      return
+    }
+
+    let query = supabase.from('dpc').select('dpccode, dpcname')
+
+    if (isSuperAdmin.value) {
+      query = query.eq('province', provinceCode)
+    } else if (isAdmin.value) {
+      // Admin: restrict to their own province regardless of dropdown
+      const userProvince = auth.userDetails?.province_code
+      query = query.eq('province', userProvince)
+    } else {
+      // Regular user: see only their DPC
+      const userDPC = auth.userDetails?.dpc_id
+      query = query.eq('dpccode', userDPC)
+    }
+
+    const { data, error } = await query.order('dpcname')
+    if (error) throw error
+    dpcs.value = data || []
+  } catch (err) {
+    console.error('Error loading DPCs:', err)
+    $q.notify({ type: 'negative', message: 'Failed to load DPCs' })
+  }
+}
+async function loadRoles() {
+  try {
+    const { data, error } = await supabase.from('roles').select('name')
+    if (error) throw error
+    roles.value = data || []
+  } catch (err) {
+    console.error('Error loading roles:', err)
+    $q.notify({ type: 'negative', message: 'Failed to load roles' })
+  }
+}
+
+async function loadAllUsers() {
+  const { data, error } = await supabase.from('shopusers').select('*').order('firstname')
+  if (!error) allUsers.value = data
+}
+
+// ------------------- WATCHERS -------------------
+// ------------------- WATCHERS -------------------
+watch(() => createForm.value.country_code, loadProvinces)
+watch(() => createForm.value.province_code, loadDPCs)
+watch(() => editForm.value.country_code, loadProvinces)
+watch(() => editForm.value.province_code, loadDPCs)
+
 const logoutAndRedirect = async () => {
   await auth.logout() // calls Pinia logout, clears session
   window.location.href = '/' // redirect to login page
 }
-// Fetch current user data
 onMounted(async () => {
   try {
     const user = auth.user
     if (!user) return
     if (isSuperAdmin.value) loadAllUsers()
 
-    await loadDropdownData()
+    await Promise.all([loadCountries(), loadRoles()])
 
     const { data, error } = await supabase
       .from('shopusers')
       .select('*')
       .eq('userid', user.id)
       .single()
-
     if (error) throw error
 
-    editForm.value = {
-      ...data,
-      newPassword: '',
-      confirmPassword: '',
-    }
+    editForm.value = { ...data, newPassword: '', confirmPassword: '' }
+
+    if (editForm.value.country_code) await loadProvinces(editForm.value.country_code)
+    if (editForm.value.province_code) await loadDPCs(editForm.value.province_code)
   } catch (err) {
     $q.notify({ type: 'negative', message: 'Failed to load profile: ' + err.message })
   }
 })
-
 // Computed
-const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
+//const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
 
 // Navigation
 const goBack = () => router.push('/')
@@ -550,25 +624,6 @@ const deleteUser = async (userId) => {
     $q.notify({ type: 'negative', message: err.message })
   }
 }
-
-// SuperAdmin: list of all users
-const allUsers = ref([])
-
-// Load all users
-async function loadAllUsers() {
-  const { data, error } = await supabase
-    .from('shopusers')
-    .select('*')
-    .order('firstname', { ascending: true })
-
-  if (error) {
-    console.error(error)
-  } else {
-    allUsers.value = data
-  }
-}
-
-const selectedUser = ref(null) // track the clicked user
 
 // when a row is clicked
 function loadUserToEdit(user) {

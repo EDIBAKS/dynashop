@@ -34,6 +34,11 @@ const routes = [
         component: () => import('pages/StockPage.vue'),
       },
       {
+        path: '/adminpage',
+        name: 'admin',
+        component: () => import('pages/AdminPanel.vue'),
+      },
+      {
         path: '/edit-sale/:receiptno',
         name: 'EditSale',
         component: () => import('pages/EditSalePage.vue'),

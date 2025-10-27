@@ -7,7 +7,7 @@
       flat
       dense
       style="min-width: 90px"
-      @click="exportToExcel"
+      @click="downloadExcel"
     />
     <q-btn
       color="red"
@@ -16,7 +16,7 @@
       flat
       dense
       style="min-width: 90px"
-      @click="exportToPDF"
+      @click="downloadPDF"
     />
   </div>
 </template>
@@ -26,23 +26,15 @@ import { reactive } from 'vue'
 import * as XLSX from 'xlsx'
 import dayjs from 'dayjs'
 import jsPDF from 'jspdf'
-
 import autoTable from 'jspdf-autotable'
 import { useAuth } from 'src/stores/auth'
+
 const auth = useAuth()
 
-const getFirstDayOfMonth = () => {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-}
-const getLastDayOfMonth = () => {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-}
-
 const form = reactive({
-  startDate: localStorage.getItem('reportStartDate') || getFirstDayOfMonth(),
-  endDate: localStorage.getItem('reportEndDate') || getLastDayOfMonth(),
+  startDate:
+    localStorage.getItem('reportStartDate') || dayjs().startOf('month').format('YYYY-MM-DD'),
+  endDate: localStorage.getItem('reportEndDate') || dayjs().endOf('month').format('YYYY-MM-DD'),
   dpccode: localStorage.getItem('reportDpccode') || '',
   shopName: '',
 })
@@ -53,69 +45,103 @@ const props = defineProps({
   extraInfo: { type: Object, default: () => ({}) },
 })
 
-// ----------------- Excel Export -----------------
-// ----------------- Excel Export -----------------
-const exportToExcel = () => {
-  if (!props.reportData || props.reportData.length === 0) return
+const downloadExcel = () => {
+  if (!props.reportData || !props.reportData.length) return
 
-  const wb = XLSX.utils.book_new() // create workbook
-  const marginInfo = [
+  const wb = XLSX.utils.book_new()
+  const header = [
     ['DYNAPHARM'],
     [props.reportType.toUpperCase()],
     [`Period: ${form.startDate} - ${form.endDate}`],
-    [`DPC: ${form.dpccode || ''}`],
+    [`DPC: ${(form.dpccode || '').toUpperCase()}`],
     [],
   ]
 
-  // --- DAILY SALES / PERSONAL BV / PERSONAL SALES ---
+  const marginRow = ['']
+
+  const addSheet = (name, data) => {
+    let safeName = (name || 'Sheet1').substring(0, 31)
+    const ws = XLSX.utils.aoa_to_sheet(data)
+
+    // Auto column widths
+    const colWidths = data[0].map(
+      (_, i) => Math.max(...data.map((r) => (r[i] ? r[i].toString().length : 10))) + 2,
+    )
+    ws['!cols'] = colWidths.map((w) => ({ wch: w }))
+
+    XLSX.utils.book_append_sheet(wb, ws, safeName)
+  }
+
+  // --- GRAND TOTALS TRACKER ---
+  let grandTotals = { amount: 0, bv: 0 }
+
+  // =========================================================
+  // DAILY / PERSONAL REPORTS
+  // =========================================================
   if (['dailySales', 'personalBV', 'personalSales'].includes(props.reportType)) {
-    const distributors = [...new Set(props.reportData.map((r) => r.distributoridno))]
+    props.reportData.forEach((dist) => {
+      const sheetData = [...header]
+      const receipts = dist.sales || [dist] // match PDF logic
 
-    distributors.forEach((distId) => {
-      const distReceipts = props.reportData.filter((r) => r.distributoridno === distId)
-      const distName = distReceipts[0]?.distributorname || ''
-
-      const sheetData = [...marginInfo, [`Distributor ID: ${distId}`, `Name: ${distName}`], []]
-
-      let grandAmount = 0
-      let grandBV = 0
-
-      distReceipts.forEach((receipt) => {
-        const formattedDate = dayjs(receipt.salesdate).format('MMM D, YYYY')
+      if (dist.distributoridno) {
         sheetData.push([
-          `Receipt No: ${receipt.receiptno}`,
+          `Distributor ID: ${dist.distributoridno}`,
+          `Name: ${dist.distributorname || ''}`,
+        ])
+        sheetData.push(marginRow)
+      }
+
+      let distTotalAmount = 0
+      let distTotalBV = 0
+
+      receipts.forEach((r) => {
+        const items = r.salesdetails || []
+        const formattedDate = dayjs(r.salesdate).format('MMM D, YYYY')
+
+        sheetData.push([
+          `Receipt No: ${r.receiptno}`,
           `Date: ${formattedDate}`,
-          `Status: ${receipt.status}`,
+          `Status: ${r.status || ''}`,
         ])
 
-        const items = receipt.salesdetails || []
-        if (items.length > 0) {
+        if (items.length) {
           sheetData.push(['Product Code', 'Product Name', 'Price', 'Qty', 'BV', 'Total'])
+
+          let receiptTotal = { amount: 0, bv: 0 }
+
           items.forEach((i) => {
-            const total = (i.unitprice || 0) * (i.quantity || 0)
+            const price = i.unitprice || 0
+            const qty = i.quantity || 0
+            const bv = (i.unitbv || 0) * qty
+            const amt = price * qty
+
             sheetData.push([
-              i.productcode || 'N/A',
-              i.productname || 'N/A',
-              i.unitprice || 0,
-              i.quantity || 0,
-              i.unitbv || 0,
-              total.toFixed(2),
+              i.productcode,
+              i.productname,
+              price.toFixed(2),
+              qty,
+              bv.toFixed(2),
+              amt.toFixed(2),
             ])
-            grandAmount += total
-            grandBV += i.unitbv || 0
+
+            receiptTotal.amount += amt
+            receiptTotal.bv += bv
           })
-          sheetData.push([])
+
+          // Totals per receipt
+          sheetData.push(['', '', '', '', 'Receipt Total Amount', receiptTotal.amount.toFixed(2)])
+          sheetData.push(['', '', '', '', 'Receipt Total BV', receiptTotal.bv.toFixed(2)])
+          sheetData.push(marginRow)
+
+          distTotalAmount += receiptTotal.amount
+          distTotalBV += receiptTotal.bv
         }
       })
 
-      // Grand totals
-      sheetData.push([])
-      sheetData.push([
-        'Grand Total Amount',
-        grandAmount.toFixed(2),
-        'Grand Total BV',
-        grandBV.toFixed(2),
-      ])
+      // Distributor totals
+      sheetData.push(['', '', '', '', 'Total Amount', distTotalAmount.toFixed(2)])
+      sheetData.push(['', '', '', '', 'Total BV', distTotalBV.toFixed(2)])
+      sheetData.push(marginRow)
       sheetData.push([
         'Printed by',
         auth.userDetails.firstname || 'System User',
@@ -123,86 +149,105 @@ const exportToExcel = () => {
         new Date().toLocaleString(),
       ])
 
-      const ws = XLSX.utils.aoa_to_sheet(sheetData)
+      addSheet(dist.distributorname || dist.distributoridno, sheetData)
 
-      // Auto column widths
-      const maxWidths = []
-      sheetData.forEach((row) => {
-        row.forEach((cell, i) => {
-          const length = cell ? cell.toString().length : 10
-          maxWidths[i] = Math.max(maxWidths[i] || 10, length)
-        })
-      })
-      ws['!cols'] = maxWidths.map((w) => ({ wch: w + 2 }))
-
-      XLSX.utils.book_append_sheet(wb, ws, distName ? distName.substring(0, 25) : distId)
+      grandTotals.amount += distTotalAmount
+      grandTotals.bv += distTotalBV
     })
   }
 
-  // --- TALLYS ---
+  // =========================================================
+  // TALLYS (DAILY / MONTHLY)
+  // =========================================================
   else if (props.reportType === 'tallys') {
     const tallyType = props.extraInfo?.tallyType || 'daily'
-    const tallies = props.reportData
-
-    const sheetData = [...marginInfo, [`Tally Type: ${tallyType.toUpperCase()}`], []]
+    const sheetData = [...header, [`Tally Type: ${tallyType.toUpperCase()}`], []]
     let grandAmount = 0
     let grandBV = 0
 
     if (tallyType === 'daily') {
-      tallies.forEach((day) => {
+      props.reportData.forEach((day) => {
         const formattedDate = dayjs(day.date).format('MMM D, YYYY')
         sheetData.push([`Date: ${formattedDate}`])
         sheetData.push(['Product Code', 'Product Name', 'Qty', 'Price', 'BV', 'Amount'])
 
-        day.items.forEach((i) => {
-          const total = (i.unitprice || 0) * (i.quantity || 0)
-          const bv = (i.bvs || 0) * (i.quantity || 0)
-          sheetData.push([
-            i.productcode || 'N/A',
-            i.productname || 'N/A',
-            i.quantity || 0,
-            (i.unitprice || 0).toFixed(2),
-            bv.toFixed(2),
-            total.toFixed(2),
-          ])
-          grandAmount += total
-          grandBV += bv
-        })
-        sheetData.push([])
-      })
-    }
+        let totalQty = 0,
+          totalBV = 0,
+          totalAmt = 0
 
-    if (tallyType === 'monthly') {
-      tallies.forEach((month) => {
-        sheetData.push([`Month: ${month.month}`])
+        day.items.forEach((i) => {
+          const bv = i.bvs * i.quantity || 0
+          const amt = i.unitprice * i.quantity || 0
+
+          sheetData.push([
+            i.productcode,
+            i.productname,
+            i.quantity,
+            i.unitprice.toFixed(2),
+            bv.toFixed(2),
+            amt.toFixed(2),
+          ])
+
+          totalQty += i.quantity
+          totalBV += bv
+          totalAmt += amt
+        })
+
+        sheetData.push([
+          `Total Qty: ${totalQty}`,
+          '',
+          '',
+          `Total BV: ${totalBV.toFixed(2)}`,
+          '',
+          `Total Amount: ${totalAmt.toFixed(2)}`,
+        ])
+        sheetData.push(marginRow)
+
+        grandAmount += totalAmt
+        grandBV += totalBV
+      })
+    } else {
+      props.reportData.forEach((period) => {
+        sheetData.push([`Month: ${period.month}`])
         sheetData.push(['Product Code', 'Product Name', 'BV', 'Price', 'Qty', 'Amount'])
 
-        month.items.forEach((i) => {
-          const total = (i.unitprice || 0) * (i.quantity || 0)
-          const bv = (i.bvs || 0) * (i.quantity || 0)
+        let totalBV = 0,
+          totalAmt = 0
+
+        period.items.forEach((i) => {
+          const bv = i.totalBvs || 0
+          const amt = i.totalAmount || 0
+
           sheetData.push([
-            i.productcode || 'N/A',
-            i.productname || 'N/A',
+            i.productcode,
+            i.productname,
             bv.toFixed(2),
             (i.unitprice || 0).toFixed(2),
-            i.quantity || 0,
-            total.toFixed(2),
+            i.totalQuantity,
+            amt.toFixed(2),
           ])
-          grandAmount += total
-          grandBV += bv
+
+          totalBV += bv
+          totalAmt += amt
         })
-        sheetData.push([])
+
+        sheetData.push([
+          '',
+          '',
+          `Total BV: ${totalBV.toFixed(2)}`,
+          '',
+          '',
+          `Total Amount: ${totalAmt.toFixed(2)}`,
+        ])
+        sheetData.push(marginRow)
+
+        grandAmount += totalAmt
+        grandBV += totalBV
       })
     }
 
-    // Grand totals
-    sheetData.push([])
-    sheetData.push([
-      'Grand Total Amount',
-      grandAmount.toFixed(2),
-      'Grand Total BV',
-      grandBV.toFixed(2),
-    ])
+    sheetData.push(['Grand Total Amount', grandAmount.toFixed(2)])
+    sheetData.push(['Grand Total BV', grandBV.toFixed(2)])
     sheetData.push([
       'Printed by',
       auth.userDetails.firstname || 'System User',
@@ -210,31 +255,24 @@ const exportToExcel = () => {
       new Date().toLocaleString(),
     ])
 
-    const ws = XLSX.utils.aoa_to_sheet(sheetData)
-    const maxWidths = []
-    sheetData.forEach((row) =>
-      row.forEach(
-        (cell, i) => (maxWidths[i] = Math.max(maxWidths[i] || 10, (cell || '').toString().length)),
-      ),
-    )
-    ws['!cols'] = maxWidths.map((w) => ({ wch: w + 2 }))
-    XLSX.utils.book_append_sheet(wb, ws, `Tallys`)
+    addSheet('Tallys', sheetData)
   }
 
-  // --- SALES ---
+  // =========================================================
+  // SALES
+  // =========================================================
   else if (props.reportType === 'sales') {
-    const sales = props.reportData
-    const sheetData = [...marginInfo, ['Date', 'Total Sales']]
+    const sheetData = [...header, ['Date', 'Total Sales']]
     let grandAmount = 0
 
-    sales.forEach((s) => {
-      const total = s.total || 0
-      sheetData.push([dayjs(s.date).format('MMM D, YYYY'), total.toFixed(2)])
-      grandAmount += total
+    props.reportData.forEach((s) => {
+      const amt = s.total || 0
+      sheetData.push([dayjs(s.date).format('MMM D, YYYY'), amt.toFixed(2)])
+      grandAmount += amt
     })
 
     sheetData.push([])
-    sheetData.push(['Grand Total', grandAmount.toFixed(2)])
+    sheetData.push(['Grand Total Amount', grandAmount.toFixed(2)])
     sheetData.push([
       'Printed by',
       auth.userDetails.firstname || 'System User',
@@ -242,116 +280,89 @@ const exportToExcel = () => {
       new Date().toLocaleString(),
     ])
 
-    const ws = XLSX.utils.aoa_to_sheet(sheetData)
-    const maxWidths = []
-    sheetData.forEach((row) =>
-      row.forEach(
-        (cell, i) => (maxWidths[i] = Math.max(maxWidths[i] || 10, (cell || '').toString().length)),
-      ),
-    )
-    ws['!cols'] = maxWidths.map((w) => ({ wch: w + 2 }))
-    XLSX.utils.book_append_sheet(wb, ws, 'Sales')
+    addSheet('Sales', sheetData)
   }
 
-  // --- Save Excel File ---
-  const fileName = `${props.reportType}_${new Date().toISOString().slice(0, 10)}.xlsx`
-  XLSX.writeFile(wb, fileName)
+  XLSX.writeFile(wb, `${props.reportType}_${dayjs().format('YYYY-MM-DD')}.xlsx`)
 }
 
-// ----------------- PDF Export -----------------
-// ----------------- PDF Export -----------------
-const exportToPDF = () => {
-  if (!props.reportData || props.reportData.length === 0) return
+// ---------------- PDF ----------------
+const downloadPDF = () => {
+  if (!props.reportData || !props.reportData.length) return
 
   const doc = new jsPDF()
-  const pageHeight = doc.internal.pageSize.height
   const margin = 10
-  let startY = 50
+  let y = 50
   const grandTotals = { amount: 0, bv: 0 }
 
-  const addPageIfNeeded = (currentY) => {
-    if (currentY > pageHeight - 30) {
-      doc.addPage()
-      return margin
-    }
-    return currentY
-  }
+  const addPageIfNeeded = (currentY) =>
+    currentY > doc.internal.pageSize.height - 30 ? (doc.addPage(), margin) : currentY
 
   // --- Header ---
-  doc.setFont('helvetica', 'bold')
   doc.setFontSize(18)
-  doc.setTextColor(200, 0, 0) // red
+  doc.setTextColor(200, 0, 0)
   doc.text('DYNAPHARM', 105, 10, { align: 'center' })
 
-  // 🟦 Report Type
   doc.setFontSize(14)
-  doc.setTextColor(0, 0, 0)
+  doc.setTextColor(0)
   doc.text(props.reportType.toUpperCase(), 105, 18, { align: 'center' })
 
-  // 🟩 Period
-  doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
   doc.text(`Period: ${form.startDate} - ${form.endDate}`, margin, 28)
-  doc.setFontSize(14)
   doc.setTextColor(0, 0, 200)
   doc.text(`DPC: ${(form.dpccode || '').toUpperCase()}`, margin, 39)
-  doc.setTextColor(0, 0, 0)
+  doc.setTextColor(0)
 
-  // === EXISTING: dailySales, personalBV, personalSales ===
+  // --- DAILY / PERSONAL ---
   if (['dailySales', 'personalBV', 'personalSales'].includes(props.reportType)) {
-    props.reportData.forEach((groupOrReceipt) => {
-      const receipts = groupOrReceipt.sales || [groupOrReceipt]
-      const distributorInfo = groupOrReceipt.distributoridno ? groupOrReceipt : null
+    props.reportData.forEach((dist) => {
+      const receipts = dist.sales || [dist]
+      receipts.forEach((r) => {
+        const items = r.salesdetails || []
 
-      receipts.forEach((receipt) => {
-        const items = receipt.salesdetails || []
-
-        // Distributor Info
-        if (distributorInfo) {
+        if (dist.distributoridno) {
           doc.setFontSize(11)
-          doc.text(`Distributor ID: ${distributorInfo.distributoridno || ''}`, margin, startY)
-          startY += 6
-          doc.text(`Name: ${distributorInfo.distributorname || ''}`, margin, startY)
-          startY += 8
+          doc.text(`Distributor ID: ${dist.distributoridno}`, margin, y)
+          y += 6
+          doc.text(`Name: ${dist.distributorname || ''}`, margin, y)
+          y += 8
         }
 
-        // Receipt Header
-        const formattedDate = dayjs(receipt.salesdate).format('MMM D, YYYY')
+        const formattedDate = dayjs(r.salesdate).format('MMM D, YYYY')
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(12)
         doc.setTextColor(0, 0, 255)
-        doc.text(`Receipt No: ${receipt.receiptno || ''}`, margin, startY)
-        const textWidth = doc.getTextWidth(`Receipt No: ${receipt.receiptno || ''}`)
-        doc.setTextColor(0, 0, 0)
-        doc.text(
-          ` | Date: ${formattedDate} | Status: ${receipt.status || ''}`,
-          margin + textWidth,
-          startY,
-        )
+        doc.text(`Receipt No: ${r.receiptno}`, margin, y)
+        const textWidth = doc.getTextWidth(`Receipt No: ${r.receiptno}`)
+        doc.setTextColor(0)
+        doc.text(` | Date: ${formattedDate} | Status: ${r.status || ''}`, margin + textWidth, y)
+        y += 5
 
-        startY += 5
-
-        if (items.length > 0) {
+        if (items.length) {
+          // Display the table using precomputed totals
           autoTable(doc, {
-            startY,
+            startY: y,
             head: [['Product Code', 'Product Name', 'Price', 'Qty', 'BV', 'Total']],
             body: items.map((i) => [
-              i.productcode || 'N/A',
-              i.productname || 'N/A',
-              i.unitprice || 0,
-              i.quantity || 0,
-              i.unitbv || 0,
-              ((i.unitprice || 0) * (i.quantity || 0)).toFixed(2),
+              i.productcode,
+              i.productname,
+              (i.unitprice || 0).toFixed(2),
+              i.quantity,
+              (i.unitbv * i.quantity).toFixed(2),
+              (i.unitprice * i.quantity).toFixed(2),
             ]),
             styles: { fontSize: 9 },
             margin: { left: margin, right: margin },
           })
 
           const finalY = doc.lastAutoTable.finalY
+
+          // Compute totals using precomputed values only
           const receiptTotal = items.reduce(
             (tot, i) => {
               tot.amount += (i.unitprice || 0) * (i.quantity || 0)
-              tot.bv += i.unitbv || 0
+              tot.bv += (i.unitbv || 0) * (i.quantity || 0)
               return tot
             },
             { amount: 0, bv: 0 },
@@ -360,42 +371,39 @@ const exportToPDF = () => {
           doc.text(`Receipt Total Amount: ${receiptTotal.amount.toFixed(2)}`, margin, finalY + 8)
           doc.text(`Receipt Total BV: ${receiptTotal.bv.toFixed(2)}`, margin, finalY + 16)
 
+          // Add to grand totals
           grandTotals.amount += receiptTotal.amount
           grandTotals.bv += receiptTotal.bv
 
-          startY = finalY + 24
-        } else {
-          startY += 15
-        }
+          y = finalY + 24
+        } else y += 15
 
         doc.setDrawColor(200)
         doc.setLineWidth(0.4)
-        doc.line(margin, startY, 200, startY)
-        startY += 10
-        startY = addPageIfNeeded(startY)
+        doc.line(margin, y, 200, y)
+        y += 10
+        y = addPageIfNeeded(y)
       })
     })
   }
 
-  // === NEW: tallys (daily / monthly) ===
+  // --- TALLYS / DAILY & MONTHLY ---
   else if (props.reportType === 'tallys') {
     const tallyType = props.extraInfo?.tallyType || 'daily'
-    const tallies = props.reportData
-
-    doc.setFont('helvetica', 'bold')
     doc.setFontSize(12)
-    doc.text(`Tally Type: ${tallyType.toUpperCase()}`, margin, startY)
-    startY += 10
+    doc.text(`Tally Type: ${tallyType.toUpperCase()}`, margin, y)
+    y += 10
 
+    // --- DAILY TALLY ---
     if (tallyType === 'daily') {
-      tallies.forEach((day) => {
+      props.reportData.forEach((day) => {
         const formattedDate = dayjs(day.date).format('MMM D, YYYY')
         doc.setFontSize(11)
-        doc.text(`Date: ${formattedDate}`, margin, startY)
-        startY += 4
+        doc.text(`Date: ${formattedDate}`, margin, y)
+        y += 4
 
         autoTable(doc, {
-          startY,
+          startY: y,
           head: [['Product Code', 'Product Name', 'Qty', 'Price', 'BV', 'Amount']],
           body: day.items.map((i) => [
             i.productcode,
@@ -421,81 +429,71 @@ const exportToPDF = () => {
         grandTotals.amount += totalAmt
         grandTotals.bv += totalBV
 
-        startY = finalY + 14
-        startY = addPageIfNeeded(startY)
+        y = finalY + 14
+        y = addPageIfNeeded(y)
       })
     }
 
-    if (tallyType === 'monthly') {
-      tallies.forEach((month) => {
+    // --- MONTHLY TALLY ---
+    else {
+      props.reportData.forEach((period) => {
         doc.setFontSize(11)
-        doc.text(`Month: ${month.month}`, margin, startY)
-        startY += 4
+        doc.text(`Month: ${period.month}`, margin, y)
+        y += 4
 
         autoTable(doc, {
-          startY,
+          startY: y,
           head: [['Product Code', 'Product Name', 'BV', 'Price', 'Qty', 'Amount']],
-          body: month.items.map((i) => [
+          body: period.items.map((i) => [
             i.productcode,
             i.productname,
-            ((i.bvs || 0) * (i.quantity || 0)).toFixed(2),
+            (i.totalBvs || 0).toFixed(2),
             (i.unitprice || 0).toFixed(2),
-            i.quantity,
-            ((i.unitprice || 0) * (i.quantity || 0)).toFixed(2),
+            i.totalQuantity,
+            (i.totalAmount || 0).toFixed(2),
           ]),
           styles: { fontSize: 9 },
           margin: { left: margin, right: margin },
         })
 
         const finalY = doc.lastAutoTable.finalY
-        const totalBV = month.items.reduce((s, i) => s + i.bvs * i.quantity, 0)
-        const totalAmt = month.items.reduce((s, i) => s + i.unitprice * i.quantity, 0)
+        const totalBV = period.items.reduce((sum, i) => sum + (i.totalBvs || 0), 0)
+        const totalAmt = period.items.reduce((sum, i) => sum + (i.totalAmount || 0), 0)
 
-        doc.text(`Month Total BV: ${totalBV.toFixed(2)}`, margin, finalY + 6)
-        doc.text(`Month Total Amount: ${totalAmt.toFixed(2)}`, margin + 80, finalY + 6)
+        doc.text(`Total BV: ${totalBV.toFixed(2)}`, margin, finalY + 6)
+        doc.text(`Total Amount: ${totalAmt.toFixed(2)}`, margin + 80, finalY + 6)
 
         grandTotals.amount += totalAmt
         grandTotals.bv += totalBV
 
-        startY = finalY + 14
-        startY = addPageIfNeeded(startY)
+        y = finalY + 14
+        y = addPageIfNeeded(y)
       })
     }
   }
 
-  // === NEW: sales ===
+  // --- SALES ---
   else if (props.reportType === 'sales') {
-    const sales = props.reportData
-
     autoTable(doc, {
-      startY,
+      startY: y,
       head: [['Date', 'Total Sales']],
-      body: sales.map((s) => [dayjs(s.date).format('MMM D, YYYY'), s.total.toFixed(2)]),
+      body: props.reportData.map((s) => [dayjs(s.date).format('MMM D, YYYY'), s.total.toFixed(2)]),
       styles: { fontSize: 10 },
       margin: { left: margin, right: margin },
     })
-
-    const totalAmt = sales.reduce((sum, s) => sum + (s.total || 0), 0)
-    grandTotals.amount += totalAmt
-    startY = doc.lastAutoTable.finalY + 10
+    grandTotals.amount += props.reportData.reduce((sum, s) => sum + (s.total || 0), 0)
+    y = doc.lastAutoTable.finalY + 10
   }
 
   // --- Grand Totals ---
-  doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Grand Total Amount: ${grandTotals.amount.toFixed(2)}`, margin, y)
+  doc.text(`Grand Total BV: ${grandTotals.bv.toFixed(2)}`, 110, y)
+  y += 8
+  doc.text(`Printed by: ${auth.userDetails.firstname || 'System User'}`, margin, y)
+  doc.text(`Date: ${new Date().toLocaleString()}`, 110, y)
 
-  const col1X = margin
-  const col2X = 110
-  const lineHeight = 8
-  let y = startY + 10
-
-  doc.text(`Grand Total Amount: ${grandTotals.amount.toFixed(2)}`, col1X, y)
-  doc.text(`Grand Total BV: ${grandTotals.bv.toFixed(2)}`, col2X, y)
-  y += lineHeight
-  doc.text(`Printed by: ${auth.userDetails.firstname || 'System User'}`, col1X, y)
-  doc.text(`Date: ${new Date().toLocaleString()}`, col2X, y)
-
-  const fileName = `${props.reportType}_${new Date().toISOString().slice(0, 10)}.pdf`
-  doc.save(fileName)
+  doc.save(`${props.reportType}_${dayjs().format('YYYY-MM-DD')}.pdf`)
 }
 </script>

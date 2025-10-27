@@ -105,7 +105,10 @@ const messages = {
     profile: 'Profile',
     profileUpdatedLogout:
       'Profile updated successfully. You will be logged out to capture changes.',
+    noRecordsFound: 'No records found',
+    onlyAdminsCanUnpend: 'Only Admin or SuperAdmin can unpend sales.',
   },
+
   fr: {
     sales: 'Ventes',
     reports: 'Rapports',
@@ -120,7 +123,7 @@ const messages = {
     // Sales Page
     newSalesEntry: 'Nouvelle Vente',
     salesDate: 'Date de vente',
-    distributorId: 'N° Distri',
+    distributorId: 'N° Distributeur',
     searchByName: 'Recherche par nom',
     selectDPC: 'Sélectionner DPC',
     dpcCode: 'Code DPC',
@@ -206,6 +209,8 @@ const messages = {
     profile: 'Profil',
     profileUpdatedLogout:
       'Profil mis à jour avec succès. Vous serez déconnecté pour appliquer les modifications.',
+    noRecordsFound: 'Aucun enregistrement trouvé',
+    onlyAdminsCanUnpend: 'Seuls les administrateurs  peuvent modifier le statut.',
   },
 }
 

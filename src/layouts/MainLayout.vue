@@ -139,6 +139,16 @@
             label="Stock"
             class="fab-action-uniform"
           />
+          <q-fab-action
+            v-if="isAdmin"
+            label-position="right"
+            icon="outbound"
+            @click="goToAdmin"
+            color="blue-grey-10"
+            :text-color="activeTab === 'stock' ? 'light-green-14' : 'white'"
+            label="Admin"
+            class="fab-action-uniform"
+          />
         </q-fab>
       </div>
     </q-page-container>
@@ -248,6 +258,10 @@ const goToReports = () => {
 const goToStock = () => {
   activeTab.value = 'stock'
   router.push({ name: 'stock' })
+}
+const goToAdmin = () => {
+  activeTab.value = 'admin'
+  router.push({ name: 'admin' })
 }
 
 onMounted(async () => {

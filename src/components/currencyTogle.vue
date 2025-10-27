@@ -30,8 +30,8 @@ const convert = (amount) => {
   const num = parseFloat(amount) || 0
 
   if (currencyType.value === 'local') {
-    return `${(num * rate).toFixed(2)} FC`
+    return `${(num * rate).toFixed(0)} FC`
   }
-  return `${num.toFixed(2)} $`
+  return `${num.toFixed(0)} $`
 }
 </script>

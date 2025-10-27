@@ -3,7 +3,12 @@
     <div class="q-pa-md" style="width: 100%; max-width: 480px">
       <q-card
         class="q-pa-md bg-transparent custom-form"
-        style="width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1)"
+        style="
+          width: 100%;
+
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        "
         @mouseover="hover = true"
         @mouseleave="hover = false"
         :class="{ hovered: hover }"
@@ -20,6 +25,7 @@
         <!-- Email Input -->
         <div class="q-mb-sm">
           <div class="text-caption text-white q-mb-xs">{{ $t('email') }}</div>
+
           <q-input
             v-model="email"
             type="email"
@@ -43,8 +49,13 @@
             rounded
             class="white-input"
             input-class="text-white text-center"
-            style="height: 44px"
+            style="height: 44px; border-radius: 22px"
           />
+        </div>
+
+        <!-- Loader -->
+        <div v-if="loading" class="q-mt-md flex flex-center">
+          <q-spinner-hourglass color="light-green" size="30px" />
         </div>
         <!-- Login Button -->
         <q-btn
@@ -93,14 +104,15 @@ const { t: $t } = useI18n()
 const email = ref('')
 const password = ref('')
 const hover = ref(false)
-
+const loading = ref(false)
 async function login() {
+  loading.value = true
   try {
     await auth.login(email.value, password.value)
 
     $q.notify({
       type: 'positive',
-      message: $t('loginSuccess'), // <-- i18n key
+      message: $t('loginSuccess'),
       position: 'top-right',
     })
 
@@ -108,9 +120,11 @@ async function login() {
   } catch (err) {
     $q.notify({
       type: 'negative',
-      message: err.message || $t('loginFailed'), // <-- i18n key fallback
+      message: err.message || $t('loginFailed'),
       position: 'top-right',
     })
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -124,7 +138,7 @@ async function login() {
 /* Apply to all outlined inputs/selects inside your form */
 .custom-form ::v-deep(.q-field--outlined .q-field__control) {
   border: 2px solid #b6acac !important; /* darker border */
-  border-radius: 8px; /* optional: smoother edges */
+  border-radius: 22px; /* optional: smoother edges */
 }
 
 /* Stronger border on hover */

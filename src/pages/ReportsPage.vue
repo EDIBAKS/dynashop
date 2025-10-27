@@ -235,6 +235,19 @@
                       <q-chip :color="statusColor(sale.status)" text-color="white" class="q-mb-xs">
                         {{ sale.status }}
                       </q-chip>
+                      By:
+                      <div
+                        :style="{
+                          backgroundColor: statusColor(sale.status),
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          display: 'inline-block',
+                          marginBottom: '4px',
+                        }"
+                      >
+                        {{ sale.createdby || 'Unknown' }}
+                      </div>
                     </div>
                   </q-card-section>
 
@@ -509,7 +522,8 @@
                         no-caps
                         :color="sale.status === 'pending' ? 'red' : 'green'"
                         :icon="sale.status === 'pending' ? 'check_circle' : 'warning'"
-                        :label="sale.status === 'pending' ? 'Set Complete' : 'Set Pending'"
+                        :label="sale.status === 'pending' ? 'Mark Correct' : 'Set Pending'"
+                        :disable="sale.status === 'pending' && !isAdmin"
                         @click="toggleStatus(sale)"
                       />
                     </div>
@@ -640,55 +654,89 @@
                 No monthly tallies found for the selected date range.
               </div>
 
-              <q-card v-else flat bordered class="q-mb-md">
+              <q-card
+                v-else
+                flat
+                bordered
+                class="q-mb-md"
+                v-for="monthItem in monthlyTallies"
+                :key="monthItem.month"
+              >
                 <q-card-section>
+                  <!-- Month header -->
+                  <div class="text-h6 text-bold text-primary q-mb-sm">
+                    {{ monthItem.month }}
+                  </div>
+
                   <div class="table-responsive">
                     <table class="q-table q-mb-sm" style="width: 100%">
                       <thead>
-                        <tr>
+                        <tr class="bg-grey-2 text-bold">
                           <th>{{ $t('Productcode') }}</th>
                           <th>{{ $t('ProductName') }}</th>
-                          <th>BV</th>
-                          <th>{{ $t('DistributorPrice') }}</th>
                           <th>{{ $t('Quantity') }}</th>
+                          <th>{{ $t('DistributorPrice') }}</th>
+                          <th>BV</th>
                           <th>{{ $t('Amount') }}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <template v-for="monthItem in monthlyTallies" :key="monthItem.month">
-                          <!-- Month header -->
-                          <tr>
-                            <td colspan="6" class="bg-grey-3 text-bold">{{ monthItem.month }}</td>
-                          </tr>
+                        <tr
+                          v-for="item in monthItem.items"
+                          :key="item.productcode"
+                          class="hover:bg-grey-1"
+                        >
+                          <td>{{ item.productcode }}</td>
+                          <td>{{ item.productname }}</td>
+                          <td class="text-center">
+                            <q-badge
+                              color="light-green-14 text-black text-bold"
+                              class="flex items-center justify-center text-bold"
+                              style="
+                                font-size: 13px;
+                                min-width: 40px;
+                                height: 28px;
+                                border-radius: 8px;
+                              "
+                            >
+                              {{ item.totalQuantity }}
+                            </q-badge>
+                          </td>
+                          <td>{{ convert((item.unitprice || 0).toFixed(0)) }}</td>
+                          <td>{{ item.totalBvs.toFixed(2) }}</td>
 
-                          <!-- Rows for each product in the month -->
-                          <tr
-                            v-for="item in monthItem.items"
-                            :key="item.receiptno + '-' + item.productcode"
-                          >
-                            <td>{{ item.productcode }}</td>
-                            <td>{{ item.productname }}</td>
-                            <td>{{ ((item.bvs || 0) * (item.quantity || 0)).toFixed(2) }}</td>
-                            <td>{{ (item.unitprice || 0).toFixed(2) }}</td>
-                            <td>{{ item.quantity }}</td>
-                            <td>{{ ((item.unitprice || 0) * (item.quantity || 0)).toFixed(2) }}</td>
-                          </tr>
-                        </template>
+                          <td>{{ convert(item.totalAmount.toFixed(2)) }}</td>
+                        </tr>
                       </tbody>
                       <tfoot>
-                        <tr>
-                          <td colspan="4" class="text-right text-bold">Grand Totals:</td>
-                          <td class="text-bold">
-                            {{ monthlyTallies.reduce((sum, m) => sum + m.quantityTotal, 0) }}
-                          </td>
-                          <td class="text-bold">
-                            {{
-                              monthlyTallies.reduce((sum, m) => sum + m.amountTotal, 0).toFixed(2)
-                            }}
-                          </td>
+                        <tr class="bg-grey-3 text-bold">
+                          <td colspan="4" class="text-right">Month Totals:</td>
+                          <td>{{ monthItem.quantityTotal }}</td>
+                          <td>{{ convert(monthItem.amountTotal.toFixed(0)) }}</td>
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                </q-card-section>
+              </q-card>
+
+              <!-- Grand Totals across all months -->
+              <q-card flat bordered class="q-mt-md bg-grey-2">
+                <q-card-section>
+                  <div class="text-right text-bold">
+                    <span class="q-mr-md">Grand Quantity:</span>
+                    <q-badge color="green" class="q-pa-xs text-bold">
+                      {{ monthlyTallies.reduce((sum, m) => sum + m.quantityTotal, 0) }}
+                    </q-badge>
+
+                    <span class="q-ml-md q-mr-md">Grand Amount:</span>
+                    <span class="text-primary">
+                      {{
+                        convert(
+                          monthlyTallies.reduce((sum, m) => sum + m.amountTotal, 0).toFixed(2),
+                        )
+                      }}
+                    </span>
                   </div>
                 </q-card-section>
               </q-card>
@@ -752,155 +800,140 @@
             </q-card>
           </template>
           <template v-if="form.reportType === 'queriedSales'">
+            <!-- Exporter -->
             <reportExporter reportType="dailySales" :reportData="paginatedSales" />
-            <div v-for="sale in paginatedSales" :key="sale.receiptno" class="q-mt-md">
-              <q-card flat bordered>
-                <!-- Section 1: Receipt & Date -->
-                <q-card-section class="row justify-between items-center">
-                  <div class="text-subtitle2 text-bold text-green-14">
-                    <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
-                  </div>
-                  <div class="text-subtitle2">
-                    <b>SaleDate:</b> {{ formatDateTime(sale.salesdate) }}
-                  </div>
-                </q-card-section>
-                <!-- Section 2: Distributor info & status -->
-                <q-card-section class="row justify-between items-center q-pt-xs q-pb-xs">
-                  <div class="column">
+
+            <!-- No Records Banner -->
+            <div v-if="!paginatedSales.length" class="q-mt-lg">
+              <q-banner dense rounded class="bg-grey-3 text-grey-8 text-center q-pa-sm">
+                <q-icon name="info" color="primary" size="20px" class="q-mr-sm" />
+                {{ $t('noRecordsFound') }}
+              </q-banner>
+            </div>
+
+            <!-- Sales List -->
+            <div v-else>
+              <div v-for="sale in paginatedSales" :key="sale.receiptno" class="q-mt-md">
+                <q-card flat bordered>
+                  <!-- Section 1: Receipt & Date -->
+                  <q-card-section class="row justify-between items-center">
+                    <div class="text-subtitle2 text-bold text-green-14">
+                      <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
+                    </div>
+                    <div class="text-subtitle2">
+                      <b>{{ $t('saleDate') }}:</b> {{ formatDateTime(sale.salesdate) }}
+                    </div>
+                  </q-card-section>
+
+                  <!-- Section 2: Distributor info & status -->
+                  <q-card-section class="row justify-between items-center q-pt-xs q-pb-xs">
+                    <div class="column">
+                      <div>
+                        <b>{{ $t('distributorID') }}:</b> {{ sale.distributoridno }}
+                      </div>
+                      <div class="text-red-9 text-bold">
+                        <b>{{ $t('name') }}:</b> {{ sale.distributorname || 'Fetching...' }}
+                      </div>
+                      <div class="text-orange-14">
+                        {{ $t('lastmodified') }}: {{ formatDateTime(sale.lastmodified) }}
+                      </div>
+                    </div>
                     <div>
-                      <b>{{ $t('distributorID') }}:</b> {{ sale.distributoridno }}
+                      <q-chip :color="statusColor(sale.status)" text-color="white" class="q-mb-xs">
+                        {{ sale.status }}
+                      </q-chip>
                     </div>
-                    <div class="text-red-9 text-bold">
-                      <b>Name:</b> {{ sale.distributorname || 'Fetching...' }}
-                    </div>
-                    <div class="text-orange-14">
-                      {{ $t('lastmodified') }}:{{ formatDateTime(sale.lastmodified) }}
-                    </div>
-                  </div>
-                  <div>
-                    <q-chip :color="statusColor(sale.status)" text-color="white" class="q-mb-xs">
-                      {{ sale.status }}
-                    </q-chip>
-                  </div>
-                </q-card-section>
-                <q-separator />
-                <!-- Section 3: Products -->
-                <q-card-section class="q-pa-xs">
-                  <div
-                    v-for="(item, i) in sale.salesdetails"
-                    :key="i"
-                    class="row items-center no-wrap q-mb-xs"
-                    style="font-size: var(--product-font-size)"
-                  >
-                    <!-- Product Code -->
-                    <div class="col-2 text-truncate">{{ item.productcode }}</div>
-                    <!-- Product Name: take most space -->
-                    <div class="col-5 text-truncate" style="min-width: 0">
-                      {{ item.productname || 'Fetching...' }}
-                    </div>
-                    <!-- Quantity -->
-                    <div class="col-1 text-right">{{ item.quantity }}</div>
-                    <!-- Price -->
-                    <div class="col-2 text-right">
-                      {{ (item.unitprice * item.quantity).toFixed(2) }}
-                    </div>
-                    <!-- BV -->
-                    <div class="col-2 text-right">
-                      {{ (item.unitbv * item.quantity).toFixed(2) }}
-                    </div>
-                  </div>
-                </q-card-section>
-                <q-separator />
-                <!-- Section 4: Totals & Actions -->
-                <q-card-section class="row items-center justify-between q-pt-xs q-pb-xs no-wrap">
-                </q-card-section>
-                <q-card-section class="row items-center justify-between q-pt-xs q-pb-xs no-wrap">
-                  <div
-                    class="row items-center justify-between q-gutter-md no-wrap"
-                    style="width: 100%"
-                  >
-                    <!-- Totals -->
-                    <div class="flex-grow" style="flex: 1 1 auto; min-width: 0">
-                      <b>{{ $t('TotalPrice') }}</b> {{ totalPrice(sale).toFixed(2) }} $
-                    </div>
-                    <div
-                      class="flex-grow text-blue-10 text-bold"
-                      style="flex: 1 1 auto; min-width: 0; text-align: center"
-                    >
-                      <q-icon name="mdi-piggy-bank" size="18px" class="q-mr-xs" />
-                      {{ (totalPrice(sale) * exchangeRate).toFixed(0) }}
-                    </div>
-                    <div
-                      class="flex-grow text-orange-10"
-                      style="flex: 1 1 auto; min-width: 0; text-align: right"
-                    >
-                      <b>{{ $t('totalBV') }}:</b> {{ totalBV(sale).toFixed(2) }}
-                    </div>
-                  </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section class="row justify-center items-center q-pt-xs q-pb-xs">
-                  <div class="row justify-evenly items-center full-width q-gutter-xs wrap">
-                    <q-btn
-                      v-if="isAdmin"
-                      flat
-                      no-caps
-                      style="color: orange"
-                      label="Update"
-                      icon="edit_note"
-                      @click="
-                        $router.push({ name: 'EditSale', params: { receiptno: sale.receiptno } })
-                      "
-                    />
-                    <q-btn
-                      v-if="isAdmin"
-                      flat
-                      no-caps
-                      style="color: red"
-                      icon="delete"
-                      label="Delete"
-                      @click="confirmDeleteReceipt(sale)"
-                    />
-                    <q-btn
-                      flat
-                      no-caps
-                      :color="sale.status === 'pending' ? 'red' : 'green'"
-                      :icon="sale.status === 'pending' ? 'check_circle' : 'warning'"
-                      :label="sale.status === 'pending' ? 'Set Complete' : 'Set Pending'"
-                      @click="toggleStatus(sale)"
-                    />
-                  </div>
-                </q-card-section>
-                <q-separator />
-              </q-card>
-              <q-dialog v-model="editDialog">
-                <q-card style="min-width: 400px">
-                  <q-card-section>
-                    <div class="text-h6">{{ $t('EditReciept') }}</div>
                   </q-card-section>
-                  <q-card-section>
-                    <q-input
-                      v-model="editForm.distributoridno"
-                      label="Distributor ID"
-                      dense
-                      outlined
-                    />
-                    <q-input v-model="editForm.dpccode" label="DPC Code" dense outlined />
-                    <q-input
-                      v-model="editForm.salesdate"
-                      label="Sales Date"
-                      type="date"
-                      dense
-                      outlined
-                    />
-                    <!-- Product details would go here (table or list) -->
+
+                  <q-separator />
+
+                  <!-- Section 3: Products -->
+                  <q-card-section class="q-pa-xs">
+                    <div
+                      v-for="(item, i) in sale.salesdetails"
+                      :key="i"
+                      class="row items-center no-wrap q-mb-xs"
+                      style="font-size: var(--product-font-size)"
+                    >
+                      <div class="col-2 text-truncate">{{ item.productcode }}</div>
+                      <div class="col-5 text-truncate" style="min-width: 0">
+                        {{ item.productname || 'Fetching...' }}
+                      </div>
+                      <div class="col-1 text-right">{{ item.quantity }}</div>
+                      <div class="col-2 text-right">
+                        {{ (item.unitprice * item.quantity).toFixed(2) }}
+                      </div>
+                      <div class="col-2 text-right">
+                        {{ (item.unitbv * item.quantity).toFixed(2) }}
+                      </div>
+                    </div>
                   </q-card-section>
-                  <q-card-actions align="right">
-                    <q-btn flat label="Cancel" v-close-popup />
-                    <q-btn color="primary" label="Save" @click="submitUpdate" />
-                  </q-card-actions>
+
+                  <q-separator />
+
+                  <!-- Section 4: Totals -->
+                  <q-card-section class="row items-center justify-between q-pt-xs q-pb-xs no-wrap">
+                    <div
+                      class="row items-center justify-between q-gutter-md no-wrap"
+                      style="width: 100%"
+                    >
+                      <div class="flex-grow">
+                        <b>{{ $t('TotalPrice') }}</b> {{ totalPrice(sale).toFixed(2) }} $
+                      </div>
+                      <div
+                        class="flex-grow text-blue-10 text-bold text-center"
+                        style="flex: 1 1 auto; min-width: 0"
+                      >
+                        <q-icon name="mdi-piggy-bank" size="18px" class="q-mr-xs" />
+                        {{ (totalPrice(sale) * exchangeRate).toFixed(0) }}
+                      </div>
+                      <div
+                        class="flex-grow text-orange-10 text-right"
+                        style="flex: 1 1 auto; min-width: 0"
+                      >
+                        <b>{{ $t('totalBV') }}:</b> {{ totalBV(sale).toFixed(2) }}
+                      </div>
+                    </div>
+                  </q-card-section>
+
+                  <q-separator />
+
+                  <!-- Section 5: Actions -->
+                  <q-card-section class="row justify-center items-center q-pt-xs q-pb-xs">
+                    <div class="row justify-evenly items-center full-width q-gutter-xs wrap">
+                      <q-btn
+                        v-if="isAdmin"
+                        flat
+                        no-caps
+                        color="orange"
+                        label="Update"
+                        icon="edit_note"
+                        @click="
+                          $router.push({ name: 'EditSale', params: { receiptno: sale.receiptno } })
+                        "
+                      />
+                      <q-btn
+                        v-if="isAdmin"
+                        flat
+                        no-caps
+                        color="red"
+                        icon="delete"
+                        label="Delete"
+                        @click="confirmDeleteReceipt(sale)"
+                      />
+                      <q-btn
+                        flat
+                        no-caps
+                        :color="sale.status === 'pending' ? 'red' : 'green'"
+                        :icon="sale.status === 'pending' ? 'check_circle' : 'warning'"
+                        :label="sale.status === 'pending' ? 'Mark Correct' : 'Set Pending'"
+                        :disable="sale.status === 'pending' && !isAdmin"
+                        @click="toggleStatus(sale)"
+                      />
+                    </div>
+                  </q-card-section>
                 </q-card>
-              </q-dialog>
+              </div>
             </div>
           </template>
 
@@ -1018,7 +1051,7 @@ const statusColor = (status) => {
     case 'complete':
       return 'orange-10'
     case 'correct':
-      return 'green'
+      return 'orange-10'
     default:
       return 'grey'
   }
@@ -1097,33 +1130,68 @@ watch(
 // Responsive font size for products
 const productFontSize = ref('14px')
 onMounted(async () => {
-  // Load exchange rate
+  // --- Load exchange rate ---
   store.fetchExchangeRate()
-  const storedDPC = localStorage.getItem('reportDpccode')
-  if (storedDPC && dpcOptions.value.some((o) => o.value === storedDPC)) {
-    form.dpccode = storedDPC
-  }
 
-  // Responsive font size
+  // --- Responsive font size ---
   const updateFontSize = () => {
     productFontSize.value = window.innerWidth < 400 ? '10px' : '14px'
   }
   updateFontSize()
   window.addEventListener('resize', updateFontSize)
 
-  // Fetch DPCs if user is Admin/SuperAdmin
-  const { data, error } = await supabase.from('dpc').select('dpccode, dpcname').order('dpcname')
+  try {
+    const role = auth.userDetails?.role
+    const provinceCode = auth.userDetails?.province_code
+    const userDpc = auth.userDetails?.dpc_id
 
-  if (!error && data) {
-    dpcOptions.value = data.map((d) => ({ label: d.dpcname, value: d.dpccode }))
+    let data = []
+    let error = null
 
-    if (isAdmin.value) {
-      // Admin/SuperAdmin: preselect first DPC or keep form empty
-      form.dpccode = dpcOptions.value[0]?.value || ''
-    } else {
-      // Regular User: force DPC code to user's DPC
-      form.dpccode = auth.userDetails?.dpc_id || ''
+    // --- Fetch DPCs based on role ---
+    if (role === 'SuperAdmin') {
+      ;({ data, error } = await supabase.from('dpc').select('dpccode, dpcname').order('dpcname'))
+    } else if (role === 'Admin') {
+      ;({ data, error } = await supabase
+        .from('dpc')
+        .select('dpccode, dpcname')
+        .eq('province', provinceCode)
+        .order('dpcname'))
     }
+
+    if (error) throw error
+
+    if (role === 'SuperAdmin' || role === 'Admin') {
+      // Populate dropdown
+      dpcOptions.value = (data || []).map((d) => ({
+        label: d.dpcname,
+        value: d.dpccode,
+      }))
+
+      // Preselect stored DPC if valid
+      const storedDPC = localStorage.getItem('reportDpccode')
+      if (storedDPC && dpcOptions.value.some((o) => o.value === storedDPC)) {
+        form.dpccode = storedDPC
+      } else {
+        // Otherwise select first DPC by default
+        form.dpccode = dpcOptions.value[0]?.value || ''
+      }
+    } else {
+      // Regular user: only their DPC
+      dpcOptions.value = [
+        {
+          label: auth.userDetails?.dpcname || 'My DPC',
+          value: userDpc,
+        },
+      ]
+      form.dpccode = userDpc
+    }
+  } catch (err) {
+    console.error('Error loading DPCs:', err.message)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load DPCs: ' + err.message,
+    })
   }
 })
 
@@ -1242,7 +1310,7 @@ const dailySalesTotals = computed(() => {
     .map(([date, total]) => ({ date, total }))
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 })
-// Monthly tallies
+// Monthly tallies grouped by month and productcode
 const monthlyTallies = computed(() => {
   const raw = salesStore.salesTally || []
   if (!raw.length) return []
@@ -1258,21 +1326,43 @@ const monthlyTallies = computed(() => {
   )
 
   // Group by month
-  const grouped = {}
+  const monthlyGroups = {}
   allItems.forEach((item) => {
     const month = item.salesdate.slice(0, 7) // YYYY-MM
-    if (!grouped[month]) grouped[month] = []
-    grouped[month].push(item)
+    if (!monthlyGroups[month]) monthlyGroups[month] = []
+    monthlyGroups[month].push(item)
   })
 
-  // Return month and its items
-  return Object.entries(grouped).map(([month, items]) => ({
-    month,
-    items,
-    quantityTotal: items.reduce((sum, i) => sum + (i.quantity || 0), 0),
-    amountTotal: items.reduce((sum, i) => sum + (i.unitprice || 0) * (i.quantity || 0), 0),
-    bvsTotal: items.reduce((sum, i) => sum + (i.bvs || 0) * (i.quantity || 0), 0),
-  }))
+  // For each month, group by productcode and calculate totals
+  return Object.entries(monthlyGroups).map(([month, items]) => {
+    const products = Object.values(
+      items.reduce((acc, item) => {
+        const code = item.productcode
+        if (!acc[code]) {
+          acc[code] = {
+            productcode: code,
+            productname: item.productname,
+            unitprice: item.unitprice || 0, // ✅ keep one unit price
+            totalQuantity: 0,
+            totalAmount: 0,
+            totalBvs: 0,
+          }
+        }
+        acc[code].totalQuantity += Number(item.quantity || 0)
+        acc[code].totalAmount += (item.unitprice || 0) * (item.quantity || 0)
+        acc[code].totalBvs += (item.bvs || 0) * (item.quantity || 0)
+        return acc
+      }, {}),
+    )
+
+    return {
+      month,
+      items: products,
+      quantityTotal: products.reduce((sum, p) => sum + p.totalQuantity, 0),
+      amountTotal: products.reduce((sum, p) => sum + p.totalAmount, 0),
+      bvsTotal: products.reduce((sum, p) => sum + p.totalBvs, 0),
+    }
+  })
 })
 
 const formatDateTime = (dateStr) => {
@@ -1404,16 +1494,16 @@ const confirmDeleteReceipt = (sale) => {
 
 // when button is clicked
 const toggleStatus = (sale) => {
-  const newStatus = sale.status === 'pending' ? 'complete' : 'pending'
+  const userRole = auth.userDetails?.role
 
   $q.dialog({
-    title: $t('confirmAction'), // i18n key for "Confirm Action"
-    message: $t('changeStatusMessage', { status: newStatus }), // i18n key with interpolation
+    title: $t('confirmAction'),
+    message: $t('changeStatusMessage'),
     cancel: true,
     persistent: true,
   }).onOk(async () => {
     try {
-      const updatedStatus = await salesStore.toggleStatus(sale.receiptno, sale.salesdate)
+      const updatedStatus = await salesStore.toggleStatus(sale.receiptno, sale.salesdate, userRole)
       sale.status = updatedStatus
 
       $q.notify({

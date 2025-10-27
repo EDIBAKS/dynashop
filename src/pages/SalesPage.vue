@@ -577,7 +577,7 @@ watch(searchQuery, (newVal) => {
 // ----------------------------
 
 const validateReceiptNo = async () => {
-  // Check sales date first
+  // Step 1: ensure sales date
   if (!form.salesdate) {
     salesDateError.value = $t('selectSalesDate')
     form.receiptno = ''
@@ -586,71 +586,107 @@ const validateReceiptNo = async () => {
     salesDateError.value = ''
   }
 
+  // Step 2: prepare receipt (trim + prefix)
   let receipt = form.receiptno?.trim()
   if (!receipt) return
 
-  // Add prefix if DPC code exists
   if (form.dpccode) {
     receipt = `${form.dpccode}${receipt}`
   }
 
-  // Validate allowed characters
+  // Step 3: validate allowed chars
   const isValid = /^[a-zA-Z0-9_-]+$/.test(receipt)
   if (!isValid) {
     $q.notify({
       type: 'negative',
       message: $t('receiptInvalidChars'),
-      position: 'center', // 👈 centers the notification on screen
-      timeout: 2000, // optional: how long it stays visible (default 2500ms)
-      classes: 'text-center text-h6', // optional: make text clearer/larger
-    })
-    form.receiptno = ''
-    return
-  }
-
-  // Check if receipt already exists (case-insensitive match)
-  const { data: salesMatch } = await supabase
-    .from('salesheader')
-    .select('distributoridno, datecreated')
-    .ilike('receiptno', receipt) // case-insensitive search
-    .maybeSingle()
-
-  if (salesMatch) {
-    let { distributoridno, datecreated } = salesMatch
-
-    // Normalize DistributorIDNO to uppercase for matching
-    const normalizedID = distributoridno.toUpperCase()
-
-    const { data: distributor } = await supabase
-      .from('Distributors')
-      .select('"DistributorNames"')
-      .ilike('"DistributorIDNO"', normalizedID) // case-insensitive match
-      .maybeSingle()
-
-    const distName = distributor?.DistributorNames || 'Unknown'
-
-    // Format date according to current locale
-    const formattedDate = new Date(datecreated).toLocaleDateString(
-      locale.value === 'fr' ? 'fr-FR' : 'en-US',
-    )
-
-    $q.notify({
-      type: 'negative',
-      message: $t('noExists', {
-        date: formattedDate,
-        client: distName,
-        distributorid: distributoridno,
-      }),
-      timeout: 6500,
       position: 'center',
+      timeout: 2000,
+      classes: 'text-center text-h6',
     })
-
     form.receiptno = ''
     return
   }
 
-  // Update form with prefixed receipt
-  form.receiptno = receipt
+  try {
+    // Step 4: Query both tables in parallel
+    const [salesResp, usedResp] = await Promise.all([
+      // salesheader often uses lowercase column names; if your column is 'receiptno' lowercase this will work
+      supabase
+        .from('salesheader')
+        .select('distributoridno, datecreated')
+        .ilike('receiptno', receipt) // case-insensitive; change if needed
+        .maybeSingle(),
+
+      // UsedCsi has quoted mixed-case column names -> use exact quoted column name
+      supabase
+        .from('UsedCsi')
+        .select('"ReceiptNo", "DistributorIDNO", "SalesDate"')
+        // use .eq for exact match (case-sensitive). If you want case-insensitive use .ilike('"ReceiptNo"', receipt)
+        .eq('"ReceiptNo"', receipt)
+        .maybeSingle(),
+    ])
+
+    // Check Supabase errors for debugging
+    if (salesResp.error) {
+      console.error('salesheader query error', salesResp.error)
+      // optional: notify
+      $q.notify({ type: 'negative', message: $t('queryError'), timeout: 3000 })
+    }
+    if (usedResp.error) {
+      console.error('UsedCsi query error', usedResp.error)
+      $q.notify({ type: 'negative', message: $t('queryError'), timeout: 3000 })
+    }
+
+    const salesMatch = salesResp.data
+    const usedMatch = usedResp.data
+
+    // If either table has a match -> reject
+    if (salesMatch || usedMatch) {
+      // Prefer info from salesheader if available
+      let distributoridno = salesMatch?.distributoridno || usedMatch?.DistributorIDNO || null
+      let datecreated = salesMatch?.datecreated || usedMatch?.SalesDate || null
+
+      // Get distributor name if we have an ID
+      let distName = 'Unknown'
+      if (distributoridno) {
+        const { data: distributor, error: distErr } = await supabase
+          .from('Distributors')
+          .select('"DistributorNames"')
+          .ilike('"DistributorIDNO"', distributoridno.trim()) // case-insensitive exact match
+          .maybeSingle()
+
+        if (distErr) console.error('Distributors query error', distErr)
+
+        distName = distributor?.DistributorNames || 'Unknown'
+      }
+
+      const formattedDate = datecreated
+        ? new Date(datecreated).toLocaleDateString(locale.value === 'fr' ? 'fr-FR' : 'en-US')
+        : $t('previouslyUsed')
+
+      $q.notify({
+        type: 'negative',
+        message: $t('noExists', {
+          date: formattedDate,
+          client: distName,
+          distributorid: distributoridno || receipt,
+        }),
+        timeout: 6500,
+        position: 'center',
+      })
+
+      form.receiptno = ''
+      return
+    }
+
+    // If not found anywhere — accept it
+    form.receiptno = receipt
+  } catch (err) {
+    console.error('validateReceiptNo error', err)
+    $q.notify({ type: 'negative', message: $t('unexpectedError'), timeout: 3000 })
+    form.receiptno = ''
+  }
 }
 
 const submitSale = async () => {
@@ -730,32 +766,62 @@ const submitSale = async () => {
 // ----------------------------
 // On Component Mount
 // ----------------------------
-
 onMounted(async () => {
+  // --- Set today’s date ---
   const today = new Date()
   const yyyy = today.getFullYear()
   const mm = String(today.getMonth() + 1).padStart(2, '0')
   const dd = String(today.getDate()).padStart(2, '0')
   form.salesdate = `${yyyy}-${mm}-${dd}`
+
+  // --- Load essential data ---
   auth.loadFromLocalStorage()
   store.fetchProducts()
   store.fetchExchangeRate()
   fetchShopName()
-  if (['Admin', 'SuperAdmin'].includes(auth.userDetails?.role)) {
-    let { data, error } = await supabase.from('dpc').select('dpccode, dpcname')
 
-    if (!error) {
-      dpcOptions.value = data.map((d) => ({
+  try {
+    const role = auth.userDetails?.role
+    const provinceCode = auth.userDetails?.province_code
+    const userDpc = auth.userDetails?.dpc_id
+
+    let { data, error } = { data: [], error: null }
+
+    if (role === 'SuperAdmin') {
+      // ✅ SuperAdmin gets all DPCs
+      ;({ data, error } = await supabase.from('dpc').select('dpccode, dpcname'))
+    } else if (role === 'Admin') {
+      // ✅ Admin only sees DPCs in their province
+      ;({ data, error } = await supabase
+        .from('dpc')
+        .select('dpccode, dpcname')
+        .eq('province', provinceCode))
+    }
+
+    if (error) throw error
+
+    if (role === 'SuperAdmin' || role === 'Admin') {
+      // ✅ Populate dropdown
+      dpcOptions.value = (data || []).map((d) => ({
         label: d.dpcname,
         value: d.dpccode,
       }))
-      // ✅ Preselect user's own DPC if it exists in the list
-      form.dpccode = auth.userDetails.dpc_id
+
+      // ✅ Preselect user's own DPC if it exists
+      form.dpccode = userDpc
+    } else if (role === 'User') {
+      // ✅ User cannot change DPC
+      form.dpccode = userDpc
     }
-  } else if (auth.userDetails?.role === 'User') {
-    form.dpccode = auth.userDetails.dpc_id
+  } catch (err) {
+    console.error('Error loading DPCs:', err.message)
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load DPC list: ' + err.message,
+    })
   }
 })
+
 // Computed to check role
 const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 watch(

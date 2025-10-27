@@ -412,7 +412,7 @@ export const useSaleStore = defineStore('sales', {
           })),
         }))
         // 🔹 Debug: log the final salesTally
-        console.log('📌 Fetched salesTally:', this.salesTally)
+        //console.log('📌 Fetched salesTally:', this.salesTally)
       } catch (err) {
         console.error('fetchSalesRaw error:', err)
         this.error = err.message
@@ -508,12 +508,11 @@ export const useSaleStore = defineStore('sales', {
         this.loading = false
       }
     },
-    async toggleStatus(receiptno, salesdate) {
+    async toggleStatus(receiptno, salesdate, userRole) {
       this.loading = true
       this.error = null
 
       try {
-        // 1. Get current status
         const { data, error } = await supabase
           .from('salesheader')
           .select('status')
@@ -524,12 +523,14 @@ export const useSaleStore = defineStore('sales', {
         if (error) throw error
         if (!data) throw new Error('Receipt not found')
 
-        // 2. Work out new status
-        let newStatus = 'correct'
-        if (data.status === 'correct') newStatus = 'pending'
-        else if (data.status === 'pending') newStatus = 'complete'
+        // Restrict role permissions
+        if (data.status === 'pending' && !['Admin', 'SuperAdmin'].includes(userRole)) {
+          throw new Error('Only Admin or SuperAdmin can unpend sales.')
+        }
 
-        // 3. Update record
+        // Toggle only between correct and pending
+        const newStatus = data.status === 'correct' ? 'pending' : 'correct'
+
         const { error: updateError } = await supabase
           .from('salesheader')
           .update({
@@ -541,7 +542,6 @@ export const useSaleStore = defineStore('sales', {
 
         if (updateError) throw updateError
 
-        // ✅ If you cache sales in state, update it locally too
         const idx = this.sales.findIndex(
           (s) => s.receiptno === receiptno && s.salesdate === salesdate,
         )
