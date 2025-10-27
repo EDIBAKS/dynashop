@@ -190,7 +190,7 @@
       </q-card-section>
 
       <!-- Sales Results -->
-      <q-card-section class="q-pa-sm bg-blue-grey-10" style="border-radius: 12px">
+      <q-card-section class="q-pa-sm bg-transparent" style="border-radius: 12px">
         <CurrencyToggle v-slot="{ convert }">
           <!-- Daily Sales -->
           <template v-if="form.reportType === 'dailySales'">
@@ -235,7 +235,13 @@
                       <q-chip :color="statusColor(sale.status)" text-color="white" class="q-mb-xs">
                         {{ sale.status }}
                       </q-chip>
-                      By:
+                      By:<q-chip
+                        :color="statusColor(sale.status)"
+                        text-color="white"
+                        class="q-mb-xs"
+                      >
+                        {{ sale.createdby || 'Unknown' }}
+                      </q-chip>
                       <div
                         :style="{
                           backgroundColor: statusColor(sale.status),
@@ -814,7 +820,7 @@
             <!-- Sales List -->
             <div v-else>
               <div v-for="sale in paginatedSales" :key="sale.receiptno" class="q-mt-md">
-                <q-card flat bordered>
+                <q-card flat bordered style="border-radius: 30px">
                   <!-- Section 1: Receipt & Date -->
                   <q-card-section class="row justify-between items-center">
                     <div class="text-subtitle2 text-bold text-green-14">
@@ -1051,7 +1057,7 @@ const statusColor = (status) => {
     case 'complete':
       return 'orange-10'
     case 'correct':
-      return 'orange-10'
+      return 'light-green-14'
     default:
       return 'grey'
   }
