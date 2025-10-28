@@ -12,7 +12,8 @@
             v-if="
               form.reportType === 'dailySales' ||
               form.reportType === 'tallys' ||
-              form.reportType === 'sales'
+              form.reportType === 'sales' ||
+              form.reportType === 'bestCustomers'
             "
             class="text-white"
           >
@@ -89,7 +90,11 @@
         <!-- DPC select / input -->
         <div
           class="col-12 col-md-3"
-          v-if="['dailySales', 'tallys', 'sales', 'queriedSales'].includes(form.reportType)"
+          v-if="
+            ['dailySales', 'tallys', 'sales', 'queriedSales', 'bestCustomers'].includes(
+              form.reportType,
+            )
+          "
         >
           <div class="text-caption text-bold text-white text-bold q-mb-xs">Shop</div>
           <select
@@ -439,9 +444,6 @@
                         <div class="text-caption q-mt-xs">
                           <b>Date:</b> {{ formatDateTime(sale.salesdate) }}
                         </div>
-                        <div class="text-caption q-mt-xs">
-                          <b>Last Modified:</b> {{ formatDateTime(group.lastmodified) || '—' }}
-                        </div>
                       </div>
 
                       <!-- Column 3: Rank & Status -->
@@ -456,6 +458,13 @@
                             class="text-caption"
                           >
                             {{ sale.status }}
+                          </q-chip>
+                          By:<q-chip
+                            :color="statusColor(sale.status)"
+                            text-color="white"
+                            class="q-mb-xs"
+                          >
+                            {{ sale.createdby || 'Unknown' }}
                           </q-chip>
                         </div>
                       </div>
@@ -942,6 +951,61 @@
               </div>
             </div>
           </template>
+          <template v-if="form.reportType === 'bestCustomers'">
+            <!-- Export Button -->
+            <reportExporter reportType="bestCustomers" :reportData="sortedCustomers" />
+
+            <div v-if="!sortedCustomers.length" class="q-mt-lg">
+              <q-banner dense rounded class="bg-grey-3 text-grey-8 text-center q-pa-sm">
+                <q-icon name="info" color="primary" size="20px" class="q-mr-sm" />
+                {{ $t('noRecordsFound') }}
+              </q-banner>
+            </div>
+
+            <div v-else class="q-mt-md">
+              <!-- Report Info -->
+              <q-card flat bordered class="q-pa-md q-mb-md" style="border-radius: 20px">
+                <div class="row justify-between">
+                  <div>
+                    <div>
+                      <b>{{ $t('dateRange') }}:</b> {{ form.startDate }} — {{ form.endDate }}
+                    </div>
+                    <div>
+                      <b>{{ $t('currentUser') }}:</b>
+                      {{ auth.userDetails?.name || auth.userDetails?.firstname }}
+                    </div>
+                  </div>
+                  <div>
+                    <div><b>DPC:</b> {{ isAdmin ? form.dpccode : auth.userDetails?.dpc_id }}</div>
+                  </div>
+                </div>
+              </q-card>
+
+              <!-- Customers Table -->
+              <q-table
+                :rows="sortedCustomers"
+                :columns="columns"
+                row-key="DistributorIDNO"
+                flat
+                bordered
+                dense
+                class="shadow-2 rounded-borders"
+              >
+                <!-- Position Column -->
+                <template v-slot:body-cell-position="props">
+                  <q-td class="row items-center">
+                    <span class="q-mr-sm">{{ props.pageIndex + 1 }}</span>
+                    <q-icon name="mdi-circle" :color="bvColor(props.row.TotalBV)" size="12px" />
+                  </q-td>
+                </template>
+
+                <!-- TotalBV Column -->
+                <template v-slot:body-cell-totalBV="props">
+                  <q-td>{{ Number(props.row.TotalBV).toFixed(2) }}</q-td>
+                </template>
+              </q-table>
+            </div>
+          </template>
 
           <template v-if="summaryTotals">
             <div class="text-h6 text-bold text-white q-mb-sm">{{ summaryTotals.label }}</div>
@@ -1004,6 +1068,7 @@
     </q-card>
   </q-page>
 </template>
+
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useAuth } from 'stores/auth'
@@ -1015,6 +1080,17 @@ import { useI18n } from 'vue-i18n'
 import DistributorSearch from 'components/DistributorSearch.vue'
 import CurrencyToggle from '../components/currencyTogle.vue'
 import reportExporter from 'src/components/ExporterComponent.vue'
+
+// Icon color logic
+
+const bvColor = (bv) => {
+  if (bv > 60) return 'green'
+  if (bv > 20) return 'orange'
+  return 'red'
+}
+
+// Optional: icon logic (you can keep it same or change)
+//const bvIcon = (bv) => 'mdi-star-circle'
 
 const auth = useAuth()
 const salesStore = useSaleStore()
@@ -1077,6 +1153,11 @@ const personalTotalBV = computed(() =>
       acc + sale.salesdetails.reduce((sum, item) => sum + item.unitbv * item.quantity, 0),
     0,
   ),
+)
+
+// Sort BV descending
+const sortedCustomers = computed(() =>
+  [...salesStore.bestCustomers].sort((a, b) => b.totalBV - a.totalBV),
 )
 
 // Watch user role changes
@@ -1236,20 +1317,27 @@ const fetchData = async () => {
         break
 
       case 'tallys':
-        // simplified: fetch raw sales; aggregation will be done in component
-        await salesStore.fetchSalesRaw(form.startDate, form.endDate, dpccodeToUse)
-        break
       case 'sales':
         // simplified: fetch raw sales; aggregation will be done in component
         await salesStore.fetchSalesRaw(form.startDate, form.endDate, dpccodeToUse)
         break
-      case 'queriedSales': // ✅ New case
+
+      case 'queriedSales':
         await salesStore.fetchQueriedSales(form.startDate, form.endDate, dpccodeToUse)
+        break
+
+      case 'bestCustomers':
+        await salesStore.bestCustomer(form.startDate, form.endDate, dpccodeToUse)
+        $q.notify({
+          type: 'positive',
+          message: 'Best customers loaded successfully.',
+          timeout: 2000,
+        })
         break
 
       default:
         console.warn('Unknown report type:', form.reportType)
-        $q.notify({ type: 'warning', message: 'Unknown report type' })
+        $q.notify({ type: 'warning', message: 'Unknown report type selected.' })
     }
   } catch (err) {
     console.error('Fetch error:', err)
@@ -1437,6 +1525,7 @@ const salesByDistributor = computed(() => {
         distributorposition: sale.distributorposition,
         registereddpc: sale.registereddpc,
         lastmodified: sale.lastmodified,
+
         sales: [],
       }
     }
@@ -1451,13 +1540,16 @@ const allReports = computed(() => [
   { label: $t('tallies'), value: 'tallys' },
   { label: $t('sales'), value: 'sales' },
   { label: $t('flaggedSales'), value: 'queriedSales' },
+  { label: $t('bestCustomers'), value: 'bestCustomers' },
 ])
 const reportOptions = computed(() => {
   if (isAdmin.value) {
     return allReports.value
   }
   return allReports.value.filter((r) =>
-    ['personalBV', 'dailySales', 'tallys', 'sales', 'queriedSales'].includes(r.value),
+    ['personalBV', 'dailySales', 'tallys', 'sales', 'queriedSales', 'bestCustomers'].includes(
+      r.value,
+    ),
   )
 })
 

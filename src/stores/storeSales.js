@@ -7,6 +7,7 @@ export const useSaleStore = defineStore('sales', {
     salesTally: [], // ← must default to empty array
     loading: false,
     error: null,
+    bestCustomers: [], // ✅ this is what component will use
     // initialize from localStorage
     startDate: localStorage.getItem('reportStartDate') || null,
     endDate: localStorage.getItem('reportEndDate') || null,
@@ -111,6 +112,80 @@ export const useSaleStore = defineStore('sales', {
       } catch (err) {
         console.error('fetchSales error:', err)
         this.error = err.message
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async bestCustomer(start = this.startDate, end = this.endDate, dpc = this.dpccode) {
+      this.loading = true
+      this.error = null
+
+      try {
+        if (!dpc) throw new Error('DPC code is required')
+
+        // 1️⃣ Fetch sales header + nested salesdetails
+        const { data: salesData, error: salesError } = await supabase
+          .from('salesheader')
+          .select('receiptno, distributoridno, dpccode, salesdate, salesdetails(unitbv, quantity)')
+          .gte('salesdate', start)
+          .lte('salesdate', end)
+          .eq('dpccode', dpc)
+
+        if (salesError) throw salesError
+        if (!salesData || !salesData.length) {
+          this.bestCustomers = []
+          return []
+        }
+
+        // 2️⃣ Aggregate total BV per distributor
+        const bvTotals = {}
+        salesData.forEach((sale) => {
+          const totalBV = (sale.salesdetails || []).reduce(
+            (sum, item) => sum + item.unitbv * item.quantity,
+            0,
+          )
+          bvTotals[sale.distributoridno] = (bvTotals[sale.distributoridno] || 0) + totalBV
+        })
+
+        // 3️⃣ Sort distributors by TotalBV descending
+        const sortedBv = Object.entries(bvTotals)
+          .sort((a, b) => b[1] - a[1])
+          .map(([distributoridno, totalBV]) => ({ distributoridno, totalBV }))
+
+        // 4️⃣ Fetch distributor info
+        const distributorIds = sortedBv.map((d) => d.distributoridno)
+        const { data: distributorData, error: distError } = await supabase
+          .from('Distributors')
+          .select('DistributorIDNO, DistributorNames, DistributorTelephone1')
+          .in('DistributorIDNO', distributorIds)
+
+        if (distError) throw distError
+
+        const distLookup = (distributorData || []).reduce((acc, d) => {
+          acc[d.DistributorIDNO] = {
+            name: d.DistributorNames,
+            telephone: d.DistributorTelephone1,
+          }
+          return acc
+        }, {})
+
+        // 5️⃣ Combine BV totals with distributor info
+        const bestCustomers = sortedBv.map((item) => ({
+          DistributorIDNO: item.distributoridno,
+          DistributorNames: distLookup[item.distributoridno]?.name || 'Unknown',
+          DistributorTelephone: distLookup[item.distributoridno]?.telephone || 'N/A',
+          TotalBV: item.totalBV,
+        }))
+
+        // 6️⃣ Store in local state
+        this.bestCustomers = bestCustomers
+        return bestCustomers
+      } catch (err) {
+        console.error('bestCustomer error:', err)
+        this.error = err.message
+        this.bestCustomers = []
+        return []
       } finally {
         this.loading = false
       }

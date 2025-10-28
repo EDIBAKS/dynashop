@@ -137,7 +137,7 @@ async function login() {
 }
 /* Apply to all outlined inputs/selects inside your form */
 .custom-form ::v-deep(.q-field--outlined .q-field__control) {
-  border: 2px solid #b6acac !important; /* darker border */
+  border: 2px solid #3cee6f !important; /* darker border */
   border-radius: 22px; /* optional: smoother edges */
 }
 
