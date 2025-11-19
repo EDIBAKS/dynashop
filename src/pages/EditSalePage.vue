@@ -5,7 +5,8 @@
         <div class="text-h6">
           Edit Sale
           <div class="text-green-14 text-subtitle2">
-            {{ form.receiptno }}
+            {{ form.receiptno }}<br />
+            Sales Date: {{ formatDate(form.salesdate) }}
           </div>
         </div>
       </q-card-section>
@@ -15,10 +16,10 @@
         <!-- Distributor Search -->
         <div class="q-mb-sm">
           <!-- Distributor Search -->
-          <DistributorSearch v-model="form.distributoridno" />
+          <DistributorSearch v-model="form.distributoridno" v-model:name="form.distributorname" />
 
           <!-- Debug -->
-          <div class="q-mt-md">Selected ID: {{ form.distributoridno }}</div>
+          <!--<div class="q-mt-md">Selected ID: {{ form.distributoridno }}</div>  -->
         </div>
 
         <ul v-if="filteredDistributors.length && searchQuery.trim() !== ''" class="suggestion-list">
@@ -138,6 +139,7 @@
       </q-card-section>
 
       <q-card-actions align="right">
+        <q-spinner-hourglass color="light-green-14" size="30px" />
         <q-btn flat label="Cancel" @click="$router.back()" />
         <q-btn color="primary" label="Save" @click="submitUpdate" />
       </q-card-actions>
@@ -159,12 +161,13 @@ const router = useRouter()
 const $q = useQuasar()
 const changedItems = ref([])
 const deletedItems = ref([])
-
+const loading = ref(false)
 const salesStore = useSaleStore()
 
 const form = ref({
   receiptno: '',
   distributoridno: '',
+  distributorname: '',
   dpccode: '',
   salesdate: '',
   salesdetails: [],
@@ -173,6 +176,16 @@ const products = ref([]) // active product list
 const searchQuery = ref('')
 const distributors = ref([])
 const dpcs = ref([])
+
+// 🧩 Helper to format date into DD-MM-YYYY
+function formatDate(dateString) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}-${month}-${year}`
+}
 
 const filteredDistributors = computed(() =>
   distributors.value.filter((d) =>
@@ -243,26 +256,67 @@ const removeProduct = (i, item) => {
 }
 const deleteEntireReceipt = async () => {
   try {
-    const { error: delDetailsError } = await supabase
+    const stockTable = `${form.value.dpccode}_STOCK`
+    const currentUser = 'system'
+
+    // 🧮 Fetch all products in this receipt first
+    const { data: itemsToRestore, error: fetchError } = await supabase
       .from('salesdetails')
-      .delete()
+      .select('productcode, quantity')
       .eq('receiptno', form.value.receiptno)
 
-    if (delDetailsError) throw delDetailsError
+    if (fetchError) throw fetchError
 
-    const { error: delHeaderError } = await supabase
-      .from('salesheader')
-      .delete()
-      .eq('receiptno', form.value.receiptno)
+    if (itemsToRestore && itemsToRestore.length > 0) {
+      for (const item of itemsToRestore) {
+        const { data: stockData, error: stockErr } = await supabase
+          .from(stockTable)
+          .select('quantity')
+          .eq('productcode', item.productcode)
+          .single()
 
-    if (delHeaderError) throw delHeaderError
+        if (stockErr) throw stockErr
 
-    $q.notify({ type: 'positive', message: 'Sale deleted (no products left).' })
+        const newQty = (stockData?.quantity || 0) + item.quantity
+
+        const { error: updateErr } = await supabase
+          .from(stockTable)
+          .update({
+            quantity: newQty,
+            lastmodified: new Date(),
+            modifiedby: currentUser,
+          })
+          .eq('productcode', item.productcode)
+
+        if (updateErr) throw updateErr
+
+        $q.notify({
+          type: 'positive',
+          message: `Restored ${item.quantity} of ${item.productcode} to stock.`,
+          timeout: 1000,
+        })
+      }
+    }
+
+    // 🧹 Now delete details and header
+    await supabase.from('salesdetails').delete().eq('receiptno', form.value.receiptno)
+    await supabase.from('salesheader').delete().eq('receiptno', form.value.receiptno)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Receipt deleted and stock restored successfully.',
+    })
+
     router.back()
   } catch (err) {
-    $q.notify({ type: 'negative', message: err.message || 'Deletion failed' })
+    console.error(err)
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Failed to delete and restore stock!',
+    })
   }
 }
+
 onMounted(async () => {
   const { data } = await supabase.from('Distributors').select('DistributorIDNO, DistributorNames')
   distributors.value = data || []
@@ -330,30 +384,149 @@ const recalcItem = () => {
   // right now nothing to do, unless BV or price changes dynamically
 }
 
+// 🧾 Reusable logger function — writes to dispatchlogs table
+async function updateLog({ from, to, productcode, quantity, dispatchedby, status }) {
+  try {
+    const { error } = await supabase.from('dispatchlogs').insert([
+      {
+        from_location: from,
+        to_location: to,
+        productcode,
+        quantity,
+        dispatchedby,
+        status,
+      },
+    ])
+    if (error) throw error
+  } catch (err) {
+    console.error('Failed to record dispatch log:', err.message)
+    $q.notify({
+      type: 'warning',
+      message: `Log not recorded for ${productcode}`,
+    })
+  }
+}
+
+// 🧮 Main submit update function
 const submitUpdate = async () => {
   try {
+    if (!form.value.dpccode) {
+      $q.notify({
+        type: 'negative',
+        message: 'DPC code is required to update stock!',
+      })
+      return
+    }
+
+    loading.value = true
+    const stockTable = `${form.value.dpccode}_STOCK`
+    const currentUser = 'system'
+
+    // Case 1: Entire receipt deleted
     if (form.value.salesdetails.length === 0) {
-      // No products left -> delete entire receipt
-      const { error: delDetailsError } = await supabase
-        .from('salesdetails')
-        .delete()
-        .eq('receiptno', form.value.receiptno)
+      // Delete sales data
+      await supabase.from('salesdetails').delete().eq('receiptno', form.value.receiptno)
+      await supabase.from('salesheader').delete().eq('receiptno', form.value.receiptno)
 
-      if (delDetailsError) throw delDetailsError
+      // Log deletion
+      await updateLog({
+        from: 'SALES',
+        to: form.value.dpccode,
+        productcode: 'ALL',
+        quantity: 0,
+        dispatchedby: currentUser,
+        status: `Deleted entire receipt ${form.value.receiptno}`,
+      })
 
-      const { error: delHeaderError } = await supabase
-        .from('salesheader')
-        .delete()
-        .eq('receiptno', form.value.receiptno)
+      $q.notify({
+        type: 'positive',
+        message: 'Receipt deleted successfully.',
+      })
 
-      if (delHeaderError) throw delHeaderError
-
-      $q.notify({ type: 'positive', message: 'Sale deleted (no products left).' })
       router.back()
       return
     }
 
-    // Otherwise update as normal
+    // Case 2: Deleted items — restore to stock
+    for (const item of deletedItems.value) {
+      const { data: stockData } = await supabase
+        .from(stockTable)
+        .select('quantity')
+        .eq('productcode', item.productcode)
+        .single()
+
+      const newQty = (stockData?.quantity || 0) + item.quantity
+
+      await supabase
+        .from(stockTable)
+        .update({
+          quantity: newQty,
+          lastmodified: new Date(),
+          modifiedby: currentUser,
+        })
+        .eq('productcode', item.productcode)
+
+      await updateLog({
+        from: 'SALES',
+        to: form.value.dpccode,
+        productcode: item.productcode,
+        quantity: item.quantity,
+        dispatchedby: currentUser,
+        status: 'Deleted item — stock restored',
+      })
+    }
+
+    // Case 3 & 4: Changed and new items
+    for (const item of changedItems.value) {
+      const { data: oldItem } = await supabase
+        .from('salesdetails')
+        .select('quantity')
+        .eq('receiptno', form.value.receiptno)
+        .eq('productcode', item.productcode)
+        .maybeSingle()
+
+      const { data: stockData } = await supabase
+        .from(stockTable)
+        .select('quantity')
+        .eq('productcode', item.productcode)
+        .single()
+
+      const currentStock = stockData?.quantity || 0
+      let newQty = currentStock
+      let diff = 0
+
+      if (oldItem) {
+        diff = oldItem.quantity - item.quantity
+        newQty = currentStock + diff
+      } else {
+        diff = -item.quantity
+        newQty = currentStock - item.quantity
+      }
+
+      await supabase
+        .from(stockTable)
+        .update({
+          quantity: newQty,
+          lastmodified: new Date(),
+          modifiedby: currentUser,
+        })
+        .eq('productcode', item.productcode)
+
+      await updateLog({
+        from: 'SALES',
+        to: form.value.dpccode,
+        productcode: item.productcode,
+        quantity: Math.abs(diff),
+        dispatchedby: currentUser,
+        status: oldItem
+          ? diff > 0
+            ? 'Reduced sale quantity — stock increased'
+            : 'Increased sale quantity — stock decreased'
+          : 'New item added to sale — stock decreased',
+      })
+    }
+
+    // Case 5: Update sales header
     await salesStore.updateReceipt({
       header: {
         receiptno: form.value.receiptno,
@@ -365,10 +538,30 @@ const submitUpdate = async () => {
       changedItems: changedItems.value,
     })
 
-    $q.notify({ type: 'positive', message: 'Sale updated!' })
+    // Log sales header update
+    await updateLog({
+      from: 'SALES',
+      to: form.value.dpccode,
+      productcode: 'HEADER',
+      quantity: 0,
+      dispatchedby: currentUser,
+      status: `Updated receipt info for ${form.value.receiptno}`,
+    })
+
+    $q.notify({
+      type: 'positive',
+      message: 'Sale and stock updated successfully!',
+    })
+
     router.back()
   } catch (err) {
-    $q.notify({ type: 'negative', message: err.message || 'Update failed' })
+    console.error('Update failed:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Update failed!',
+    })
+  } finally {
+    loading.value = false
   }
 }
 </script>

@@ -55,7 +55,7 @@
 
         <!-- Loader -->
         <div v-if="loading" class="q-mt-md flex flex-center">
-          <q-spinner-hourglass color="light-green" size="30px" />
+          <q-spinner-hourglass color="light-green-14" size="30px" />
         </div>
         <!-- Login Button -->
         <q-btn

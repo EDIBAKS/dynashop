@@ -140,7 +140,6 @@
             class="fab-action-uniform"
           />
           <q-fab-action
-            v-if="isAdmin"
             label-position="right"
             icon="outbound"
             @click="goToAdmin"

@@ -21,6 +21,7 @@ const messages = {
     salesDate: 'Sales Date',
     distributorId: 'Distributor ID',
     searchByName: 'Search by name',
+    searchByNameOrID: 'Search by Name or ID',
     selectDPC: 'Select DPC',
     dpcCode: 'DPC Code',
     receiptNo: 'Receipt No',
@@ -107,6 +108,8 @@ const messages = {
       'Profile updated successfully. You will be logged out to capture changes.',
     noRecordsFound: 'No records found',
     onlyAdminsCanUnpend: 'Only Admin or SuperAdmin can unpend sales.',
+    quantity: 'Quantity Available',
+    dispatchLimitError: 'You cannot dispatch more than the available quantity.',
   },
 
   fr: {
@@ -211,6 +214,10 @@ const messages = {
       'Profil mis à jour avec succès. Vous serez déconnecté pour appliquer les modifications.',
     noRecordsFound: 'Aucun enregistrement trouvé',
     onlyAdminsCanUnpend: 'Seuls les administrateurs  peuvent modifier le statut.',
+    searchByNameOrID: 'Rechercher par nom ou identifiant',
+    quantity: 'Quantité disponible',
+
+    dispatchLimitError: 'Vous ne pouvez pas expédier plus que la quantité disponible.',
   },
 }
 

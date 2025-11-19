@@ -17,7 +17,7 @@
       dense
       outlined
       class="white-input text-semi-bold text-center text-uppercase"
-      input-class="text-white text-bold text-center text-uppercase"
+      input-class="text-black text-bold text-center text-uppercase"
     />
 
     <!-- Suggestions -->
@@ -38,32 +38,57 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { supabase } from 'boot/supabase'
 
-// ✅ v-model for DistributorIDNO
-const modelValue = defineModel()
+// v-model for DistributorIDNO
+const modelValue = defineModel() // this is distributoridno
+
+// new v-model for the name
+const modelName = defineModel('name', { default: '' }) // distributorname
 
 const searchQuery = ref('')
 const filteredDistributors = ref([])
 const confirmedDistributor = ref(false)
 
-// 🔍 Fetch distributors
+// 🔍 Fetch distributors by name
 const fetchDistributors = async (query) => {
   if (!query.trim()) {
     filteredDistributors.value = []
     return
   }
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('Distributors')
     .select('DistributorIDNO, DistributorNames')
     .ilike('DistributorNames', `%${query}%`)
 
+  filteredDistributors.value = data || []
+}
+
+// 🔍 Fetch distributor by ID (for pre-filling name)
+const fetchDistributorName = async (id) => {
+  if (!id) {
+    searchQuery.value = ''
+    confirmedDistributor.value = false
+    modelName.value = ''
+    return
+  }
+
+  const { data, error } = await supabase
+    .from('Distributors')
+    .select('DistributorNames')
+    .eq('DistributorIDNO', id)
+    .single()
+
   if (!error && data) {
-    filteredDistributors.value = data
+    searchQuery.value = data.DistributorNames
+    confirmedDistributor.value = true
+    modelName.value = data.DistributorNames // emit name to parent
   } else {
-    filteredDistributors.value = []
+    searchQuery.value = ''
+    confirmedDistributor.value = false
+    modelName.value = ''
   }
 }
 
@@ -73,16 +98,30 @@ const selectDistributor = (distributor) => {
   searchQuery.value = distributor.DistributorNames
   confirmedDistributor.value = true
   filteredDistributors.value = []
+  modelName.value = distributor.DistributorNames // emit name to parent
 }
 
 // 🔄 Watch for input changes
 watch(searchQuery, (val) => {
   if (!val.trim()) {
     modelValue.value = ''
+    modelName.value = ''
     confirmedDistributor.value = false
     filteredDistributors.value = []
   } else {
     fetchDistributors(val)
+  }
+})
+
+// 🔄 Watch for v-model changes (parent updating distributoridno)
+watch(modelValue, (val) => {
+  fetchDistributorName(val)
+})
+
+// Optional: fetch on mount if modelValue is already set
+onMounted(() => {
+  if (modelValue.value) {
+    fetchDistributorName(modelValue.value)
   }
 })
 </script>

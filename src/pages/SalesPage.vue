@@ -35,8 +35,11 @@
               type="date"
               dense
               outlined
-              class="white-input custom-border"
+              class="white-input custom-border bg-blue-grey-10"
               input-class="text-white text-bold"
+              :min="dateMin"
+              :max="dateMax"
+              popup-content-class="my-date-popup"
             />
           </div>
 
@@ -174,6 +177,14 @@
                     </q-item>
                   </template>
                 </q-select>
+              </div>
+            </div>
+            <div class="row q-col-gutter-sm q-mt-sm">
+              <div
+                class="col text-white bg-blue-grey-10 text-bold q-ml-sm q-mb-sm rounded-borders flex flex-center"
+                style="font-size: 1.1rem; text-align: center"
+              >
+                {{ $t('quantity') }}: {{ availableQuantity }}
               </div>
             </div>
 
@@ -314,6 +325,8 @@ const store = useSalesStore()
 const { t: $t, locale } = useI18n()
 //const userStore = useAuth()
 const loading = ref(false)
+const availableQuantity = ref(0)
+
 const searchQuery = ref('') // Search query for filtering
 const distributors = ref([])
 const filteredDistributors = ref([])
@@ -345,6 +358,38 @@ const selectedProduct = ref(null)
 const selectedQuantity = ref(1)
 const unitPrice = ref(0)
 const unitBV = ref(0)
+
+// Get current date info
+const today = new Date()
+const year = today.getFullYear()
+const month = today.getMonth()
+
+// Format function (yyyy-mm-dd)
+const formatDate = (date) => {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+// Compute first & last day of current month
+const firstDay = formatDate(new Date(year, month, 1))
+const lastDay = formatDate(new Date(year, month + 1, 0))
+
+// Role-based restriction
+const userRole = computed(() => auth.userDetails?.role || 'User')
+
+const dateMin = computed(() => {
+  return ['Admin', 'SuperAdmin'].includes(userRole.value)
+    ? null // No restriction
+    : firstDay
+})
+
+const dateMax = computed(() => {
+  return ['Admin', 'SuperAdmin'].includes(userRole.value)
+    ? null // No restriction
+    : lastDay
+})
 
 const removeItem = (index) => {
   form.items.splice(index, 1)
@@ -418,23 +463,77 @@ watch(selectedQuantity, (val) => {
 })
 
 // Update when a product is selected
-function updateSelectedProduct(code) {
+async function updateSelectedProduct(code) {
   selectedProduct.value = store.products.find((p) => p.productcode === code)
 
   if (selectedProduct.value) {
     unitPrice.value = selectedProduct.value.distributorprice
     unitBV.value = selectedProduct.value.bvs
     selectedQuantity.value = 1
+
+    // 🔹 Get available quantity from DPC stock table
+    if (form.dpccode) {
+      const fromTable = `${form.dpccode}_STOCK` // e.g., "RCD_STOCK"
+      const { data, error } = await supabase
+        .from(fromTable)
+        .select('quantity')
+        .eq('productcode', code)
+        .maybeSingle()
+
+      if (error) {
+        console.error('Error fetching stock quantity:', error.message)
+        availableQuantity.value = 0
+      } else {
+        availableQuantity.value = data ? data.quantity : 0
+      }
+    } else {
+      availableQuantity.value = 0
+    }
   }
 }
 
 // Update totals when quantity changes
+//function updateTotals() {
+// if (selectedProduct.value) {
+//    totalPrice.value = selectedProduct.value.distributorprice * selectedQuantity.value
+//    totalBV.value = selectedProduct.value.bvs * selectedQuantity.value
+//  }
+//}
+
+import { Notify } from 'quasar'
+
 function updateTotals() {
   if (selectedProduct.value) {
+    // 🚨 Check if quantity entered exceeds available stock
+    if (selectedQuantity.value > availableQuantity.value) {
+      Notify.create({
+        type: 'negative',
+        message: $t('dispatchLimitError'),
+        position: 'center',
+        color: 'negative',
+        icon: 'warning',
+        timeout: 3000,
+      })
+
+      // 🔁 Reset values since quantity is invalid
+      selectedQuantity.value = 0
+      totalPrice.value = 0
+      totalBV.value = 0
+
+      return
+    }
+
+    // ✅ Safe to calculate totals
     totalPrice.value = selectedProduct.value.distributorprice * selectedQuantity.value
     totalBV.value = selectedProduct.value.bvs * selectedQuantity.value
+  } else {
+    // 🔁 Reset everything if no product is selected
+    totalPrice.value = 0
+    totalBV.value = 0
+    selectedQuantity.value = 0
   }
 }
+
 // Add selected product to salesItems
 
 function addProduct() {
@@ -789,13 +888,15 @@ onMounted(async () => {
 
     if (role === 'SuperAdmin') {
       // ✅ SuperAdmin gets all DPCs
-      ;({ data, error } = await supabase.from('dpc').select('dpccode, dpcname'))
+      ;({ data, error } = await supabase
+        .from('shops')
+        .select('shopcode, shop_name, province_code, country_code'))
     } else if (role === 'Admin') {
       // ✅ Admin only sees DPCs in their province
       ;({ data, error } = await supabase
-        .from('dpc')
-        .select('dpccode, dpcname')
-        .eq('province', provinceCode))
+        .from('shops')
+        .select('shopcode, shop_name')
+        .eq('province_code', provinceCode))
     }
 
     if (error) throw error
@@ -803,8 +904,8 @@ onMounted(async () => {
     if (role === 'SuperAdmin' || role === 'Admin') {
       // ✅ Populate dropdown
       dpcOptions.value = (data || []).map((d) => ({
-        label: d.dpcname,
-        value: d.dpccode,
+        label: d.shop_name,
+        value: d.shopcode,
       }))
 
       // ✅ Preselect user's own DPC if it exists
@@ -859,6 +960,7 @@ watch(
 .distributor-option:hover {
   background-color: #f1f1f1;
 }
+
 .distributor-container {
   display: flex;
   align-items: center;
@@ -998,5 +1100,12 @@ watch(
 }
 .q-field__native {
   text-align: center !important;
+}
+
+/* Target inactive (disabled) month/year text in the QDate popup */
+.q-date__view--months .q-date__months-item.q-date__months-item--inactive,
+.q-date__view--years .q-date__years-item.q-date__years-item--inactive {
+  color: orange !important; /* Make inactive months/years orange */
+  opacity: 1 !important; /* Ensure full visibility */
 }
 </style>

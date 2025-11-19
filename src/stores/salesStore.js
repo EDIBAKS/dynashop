@@ -83,7 +83,8 @@ export const useSalesStore = defineStore('salesStore', {
       try {
         // form.salesdate = getLocalDateTime()
         const now = getLocalDateTime()
-
+        const fromTable = `${form.dpccode}_STOCK` // e.g. RCD_STOCK
+        //const modifiedBy = getModifiedBy()
         // 1. Insert into salesheader
         const { error: headerError } = await supabase.from('salesheader').insert([
           {
@@ -101,6 +102,37 @@ export const useSalesStore = defineStore('salesStore', {
         ])
 
         if (headerError) throw headerError
+
+        for (const item of form.items) {
+          const { productcode, quantity } = item
+
+          // 🔹 Fetch current stock
+          const { data: stock, error: stockError } = await supabase
+            .from(fromTable)
+            .select('quantity')
+            .eq('productcode', productcode)
+            .single()
+
+          if (stockError)
+            throw new Error(`Stock fetch failed for ${productcode}: ${stockError.message}`)
+          if (!stock || stock.quantity < quantity)
+            throw new Error(`Insufficient stock for product ${productcode}`)
+
+          // 🔹 Deduct the quantity
+          const newQty = stock.quantity - quantity
+
+          const { error: updateError } = await supabase
+            .from(fromTable)
+            .update({
+              quantity: newQty,
+              lastmodified: now,
+              modifiedby: form.lastModifiedby,
+            })
+            .eq('productcode', productcode)
+
+          if (updateError)
+            throw new Error(`Failed to update stock for ${productcode}: ${updateError.message}`)
+        }
 
         // 2. Insert each item into salesdetails
         const detailsData = form.items.map((item) => ({

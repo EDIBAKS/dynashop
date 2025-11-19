@@ -155,41 +155,41 @@
           />
         </div>
       </q-card-section>
-
-      <q-card-section class="custom-form">
+      <q-card-section>
         <!-- Loading GIF -->
         <div v-if="salesStore.loading" class="q-mt-md flex flex-center">
-          <q-spinner-hourglass color="light-green" size="50px" />
+          <q-spinner-hourglass color="light-green" size="25px" />
         </div>
+      </q-card-section>
+
+      <q-card-section class="custom-form">
         <div v-if="salesStore.error" class="text-orange q-mt-md">{{ salesStore.error }}</div>
 
         <!-- Controls -->
-        <div class="row items-center q-gutter-md q-mb-md">
-          <q-select
-            v-model="rowsPerPage"
-            :options="pageOptions"
-            label="Rows per page"
-            dense
-            outlined
-            style="width: 120px"
-          />
+        <!--
+        
+         -->
 
-          <q-btn
-            flat
-            round
-            icon="arrow_back"
-            text-color="white"
-            @click="changePage(currentPage - 1)"
-            :disable="currentPage === 1"
-          />
-          <div class="text-white">Page {{ currentPage }} / {{ totalPages }}</div>
-          <q-btn
-            flat
-            round
-            icon="arrow_forward"
-            text-color="white"
-            @click="changePage(currentPage + 1)"
-            :disable="currentPage === totalPages"
+        <div class="row items-center justify-center q-gutter-md q-mb-md">
+          <!-- Rows per Page -->
+
+          <select v-model="rowsPerPage" class="pagination-select native-select">
+            <option v-for="opt in pageOptions" :key="opt" :value="opt">
+              {{ opt }}
+            </option>
+          </select>
+
+          <!-- New QPagination Control -->
+          <q-pagination
+            v-model="currentPage"
+            :max="totalPages"
+            direction-links
+            outline
+            color="orange"
+            active-design="unelevated"
+            active-color="brown"
+            active-text-color="orange"
+            @update:model-value="changePage"
           />
         </div>
       </q-card-section>
@@ -952,9 +952,10 @@
             </div>
           </template>
           <template v-if="form.reportType === 'bestCustomers'">
-            <!-- Export Button -->
+            <!-- Export -->
             <reportExporter reportType="bestCustomers" :reportData="sortedCustomers" />
 
+            <!-- Empty State -->
             <div v-if="!sortedCustomers.length" class="q-mt-lg">
               <q-banner dense rounded class="bg-grey-3 text-grey-8 text-center q-pa-sm">
                 <q-icon name="info" color="primary" size="20px" class="q-mr-sm" />
@@ -962,8 +963,9 @@
               </q-banner>
             </div>
 
+            <!-- Report Table -->
             <div v-else class="q-mt-md">
-              <!-- Report Info -->
+              <!-- Report Info Header -->
               <q-card flat bordered class="q-pa-md q-mb-md" style="border-radius: 20px">
                 <div class="row justify-between">
                   <div>
@@ -981,7 +983,7 @@
                 </div>
               </q-card>
 
-              <!-- Customers Table -->
+              <!-- 🏆 Best Customers Table -->
               <q-table
                 :rows="sortedCustomers"
                 :columns="columns"
@@ -991,17 +993,25 @@
                 dense
                 class="shadow-2 rounded-borders"
               >
-                <!-- Position Column -->
+                <!-- 🥇 Position Column -->
                 <template v-slot:body-cell-position="props">
-                  <q-td class="row items-center">
-                    <span class="q-mr-sm">{{ props.pageIndex + 1 }}</span>
-                    <q-icon name="mdi-circle" :color="bvColor(props.row.TotalBV)" size="12px" />
+                  <q-td class="text-center text-bold">
+                    {{ props.pageIndex + 1 }}
+                  </q-td>
+                </template>
+
+                <!-- 🟢 Dot Column (BV Indicator) -->
+                <template v-slot:body-cell-bvIndicator="props">
+                  <q-td class="text-center">
+                    <q-icon name="flag" :color="bvColor(props.row.TotalBV)" size="14px" />
                   </q-td>
                 </template>
 
                 <!-- TotalBV Column -->
-                <template v-slot:body-cell-totalBV="props">
-                  <q-td>{{ Number(props.row.TotalBV).toFixed(2) }}</q-td>
+                <template v-slot:body-cell-TotalBV="props">
+                  <q-td class="text-right">
+                    {{ Number(props.row.TotalBV).toFixed(2) }}
+                  </q-td>
                 </template>
               </q-table>
             </div>
@@ -1081,14 +1091,6 @@ import DistributorSearch from 'components/DistributorSearch.vue'
 import CurrencyToggle from '../components/currencyTogle.vue'
 import reportExporter from 'src/components/ExporterComponent.vue'
 
-// Icon color logic
-
-const bvColor = (bv) => {
-  if (bv > 60) return 'green'
-  if (bv > 20) return 'orange'
-  return 'red'
-}
-
 // Optional: icon logic (you can keep it same or change)
 //const bvIcon = (bv) => 'mdi-star-circle'
 
@@ -1155,10 +1157,52 @@ const personalTotalBV = computed(() =>
   ),
 )
 
-// Sort BV descending
-const sortedCustomers = computed(() =>
-  [...salesStore.bestCustomers].sort((a, b) => b.totalBV - a.totalBV),
-)
+// Access data from store
+const sortedCustomers = computed(() => salesStore.bestCustomers || [])
+
+const columns = [
+  {
+    name: 'position',
+    label: '#',
+    field: 'position',
+    align: 'center',
+    sortable: false,
+  },
+  {
+    name: 'bvIndicator',
+    label: '',
+    field: 'bvIndicator',
+    align: 'center',
+    sortable: false,
+  },
+  {
+    name: 'DistributorNames',
+    label: 'Distributor',
+    field: 'DistributorNames',
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'DistributorTelephone',
+    label: 'Telephone',
+    field: 'DistributorTelephone',
+    align: 'left',
+  },
+  {
+    name: 'TotalBV',
+    label: 'Total BV',
+    field: 'TotalBV',
+    align: 'right',
+    sortable: true,
+  },
+]
+
+// BV color logic
+const bvColor = (bv) => {
+  if (bv > 60) return 'green-8'
+  if (bv > 20) return 'orange-8'
+  return 'red-8'
+}
 
 // Watch user role changes
 watch(
@@ -1237,13 +1281,16 @@ onMounted(async () => {
 
     // --- Fetch DPCs based on role ---
     if (role === 'SuperAdmin') {
-      ;({ data, error } = await supabase.from('dpc').select('dpccode, dpcname').order('dpcname'))
+      ;({ data, error } = await supabase
+        .from('shops')
+        .select('shopcode, shop_name, province_code, country_code')
+        .order('shop_name'))
     } else if (role === 'Admin') {
       ;({ data, error } = await supabase
-        .from('dpc')
-        .select('dpccode, dpcname')
-        .eq('province', provinceCode)
-        .order('dpcname'))
+        .from('shops')
+        .select('shopcode, shop_name')
+        .eq('province_code', provinceCode)
+        .order('shop_name'))
     }
 
     if (error) throw error
@@ -1251,8 +1298,8 @@ onMounted(async () => {
     if (role === 'SuperAdmin' || role === 'Admin') {
       // Populate dropdown
       dpcOptions.value = (data || []).map((d) => ({
-        label: d.dpcname,
-        value: d.dpccode,
+        label: d.shop_name,
+        value: d.shopcode,
       }))
 
       // Preselect stored DPC if valid
@@ -1559,17 +1606,109 @@ const totalBV = (sale) => sale.salesdetails.reduce((acc, i) => acc + i.unitbv * 
 
 // Action buttons (stub)
 
-const deleteSale = async (sale) => {
+//const deleteSale = async (sale) => {
+// try {
+//   const { error } = await supabase.from('salesheader').delete().eq('receiptno', sale.receiptno)
+
+// if (error) throw error
+
+// update local state
+// salesStore.sales = salesStore.sales.filter((s) => s.receiptno !== sale.receiptno)
+//   return true
+// } catch (err) {
+//  console.error('Delete failed:', err.message)
+//    throw err
+// }
+//}
+
+const deleteSale = async (sale, dpccode, currentUser) => {
+  if (!form.dpccode) {
+    $q.notify({
+      message: 'DPC code is not set! Cannot determine stock table.',
+      color: 'red',
+      position: 'top',
+      icon: 'error',
+    })
+    return // stop the deletion
+  }
+  const stockTable = `${form.dpccode}_STOCK`
+  //const stockTable = `${dpccode}_STOCK` // dynamic stock table
   try {
-    const { error } = await supabase.from('salesheader').delete().eq('receiptno', sale.receiptno)
+    // 1️⃣ Fetch the sale details
+    const { data: saleDetails, error: fetchError } = await supabase
+      .from('salesdetails')
+      .select('productcode, quantity')
+      .eq('receiptno', sale.receiptno)
 
-    if (error) throw error
+    if (fetchError) throw fetchError
 
-    // update local state
+    // 2️⃣ Restore quantities to stock table
+    for (const item of saleDetails) {
+      // 1️⃣ Get current stock
+      const { data: stockData, error: stockFetchError } = await supabase
+        .from(stockTable)
+        .select('quantity')
+        .eq('productcode', item.productcode)
+        .single()
+
+      if (stockFetchError) throw stockFetchError
+
+      // 2️⃣ Update quantity manually
+      const newQuantity = (stockData.quantity || 0) + item.quantity
+      const { error: stockError } = await supabase
+        .from(stockTable)
+        .update({
+          quantity: newQuantity,
+          lastmodified: new Date(),
+          modifiedby: currentUser,
+        })
+        .eq('productcode', item.productcode)
+
+      if (stockError) throw stockError
+    }
+
+    // 🔔 Notify that stock has been reversed
+    $q.notify({
+      message: 'Stock quantities restored successfully!',
+      color: 'green',
+      position: 'top',
+      icon: 'inventory_2',
+    })
+
+    // 3️⃣ Delete sale details first
+    const { error: detailsError } = await supabase
+      .from('salesdetails')
+      .delete()
+      .eq('receiptno', sale.receiptno)
+    if (detailsError) throw detailsError
+
+    // 4️⃣ Delete sale header
+    const { error: headerError } = await supabase
+      .from('salesheader')
+      .delete()
+      .eq('receiptno', sale.receiptno)
+    if (headerError) throw headerError
+
+    // 🔔 Notify that receipt was deleted
+    $q.notify({
+      message: `Receipt ${sale.receiptno} deleted successfully!`,
+      color: 'blue',
+      position: 'top',
+      icon: 'delete',
+    })
+
+    // 5️⃣ Update local store
     salesStore.sales = salesStore.sales.filter((s) => s.receiptno !== sale.receiptno)
+
     return true
   } catch (err) {
     console.error('Delete failed:', err.message)
+    $q.notify({
+      message: `Failed to delete sale: ${err.message}`,
+      color: 'red',
+      position: 'top',
+      icon: 'error',
+    })
     throw err
   }
 }
@@ -1749,6 +1888,32 @@ td {
   box-sizing: border-box;
   max-width: 100%; /* prevent overflow */
 }
+.pagination-select {
+  background-color: #263238; /* Dark background */
+  border-radius: 12px; /* Rounded corners */
+}
+
+/* Control the height */
+.pagination-select .q-field__control {
+  min-height: 38px; /* Adjust as needed */
+  height: 38px;
+}
+
+/* White label + dropdown icon */
+.pagination-select .q-field__label,
+.pagination-select .q-icon {
+  color: white !important;
+}
+
+/* White text inside the input */
+.pagination-select .q-field__native {
+  color: white !important;
+}
+
+/* White border when outlined */
+.pagination-select .q-field__control {
+  border-color: white !important;
+}
 
 .custom-select option {
   background-color: #263238; /* matches Quasar bg-blue-grey-10 */
@@ -1758,5 +1923,25 @@ td {
 .custom-select:focus {
   outline: none;
   border-color: #00bfa5;
+}
+.native-select {
+  width: 120px;
+  background-color: #263238;
+  color: white; /* white text */
+  border: 1px solid white; /* white outline */
+  border-radius: 12px; /* rounded corners */
+  padding: 8px; /* inner spacing */
+  height: 38px; /* CONTROL HEIGHT */
+  appearance: none; /* remove default arrow */
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* Optional: add custom dropdown arrow on the right (cleaner UI) */
+.native-select {
+  background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='16' viewBox='0 0 24 24' width='16' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 </style>
