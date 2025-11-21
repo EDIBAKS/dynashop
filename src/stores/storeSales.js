@@ -5,6 +5,7 @@ export const useSaleStore = defineStore('sales', {
   state: () => ({
     sales: [], // combined header + details data
     salesTally: [], // ← must default to empty array
+    currentStock: [],
     loading: false,
     error: null,
     bestCustomers: [], // ✅ this is what component will use

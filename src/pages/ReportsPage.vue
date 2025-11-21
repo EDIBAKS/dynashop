@@ -91,7 +91,7 @@
         <div
           class="col-12 col-md-3"
           v-if="
-            ['dailySales', 'tallys', 'sales', 'queriedSales', 'bestCustomers'].includes(
+            ['dailySales', 'tallys', 'sales', 'stock', 'queriedSales', 'bestCustomers'].includes(
               form.reportType,
             )
           "
@@ -814,6 +814,98 @@
               </q-card>
             </q-card>
           </template>
+          <template v-else-if="form.reportType === 'stock'">
+            <q-card flat bordered class="q-mb-md bg-grey-1">
+              <reportExporter reportType="stock" :reportData="stock" />
+              <!-- Report Header -->
+              <q-card-section v-if="reportData && reportData.length > 0" class="q-pa-sm bg-grey-2">
+                <div class="row justify-between items-center">
+                  <div>
+                    <div><strong>Report Type:</strong> {{ form.reportType }}</div>
+                    <div><strong>DPC:</strong> {{ shopName }}</div>
+                  </div>
+                  <div class="text-right">
+                    <div><strong>Date:</strong> {{ currentDate }}</div>
+                    <div><strong>User:</strong> {{ auth.userDetails.firstname }}</div>
+                  </div>
+                </div>
+              </q-card-section>
+
+              <!-- Daily Sales Totals -->
+              <div v-if="!stock.length" class="text-center text-red q-mt-md">
+                No stock found for the selected shop.
+              </div>
+
+              <q-card flat bordered class="q-mb-md">
+                <!-- FILTERS -->
+                <q-card-section class="q-gutter-sm">
+                  <q-option-group
+                    v-model="stockFilter"
+                    :options="[
+                      { label: 'All', value: 'all' },
+                      { label: 'Above 20', value: 'above20' },
+                      { label: 'Below 5', value: 'below5' },
+                    ]"
+                    type="radio"
+                    inline
+                  />
+                </q-card-section>
+
+                <!-- TABLE -->
+                <q-card-section>
+                  <div class="table-responsive">
+                    <table
+                      class="q-table q-table--flat q-table--dense stock-table"
+                      style="width: 100%"
+                    >
+                      <thead>
+                        <tr>
+                          <th class="col-code">Code</th>
+                          <th class="col-product">Product</th>
+                          <th class="col-qty">Qty</th>
+                          <th class="col-value">DP Value</th>
+                          <th class="col-value">BV Value</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        <tr
+                          v-for="item in filteredStock"
+                          :key="item.productcode"
+                          :class="rowColor(item.quantity)"
+                        >
+                          <td>{{ item.productcode }}</td>
+
+                          <!-- Product name wraps up to 2 lines then truncates -->
+                          <td class="product-wrap">{{ item.productname }}</td>
+
+                          <!-- Quantity with color rules -->
+                          <td class="text-center">{{ item.quantity }}</td>
+
+                          <td>{{ convert(item.dpValue.toFixed(2)) }}</td>
+                          <td>{{ item.bvValue.toFixed(2) }}</td>
+                        </tr>
+                      </tbody>
+
+                      <tfoot>
+                        <tr>
+                          <td colspan="3" class="text-right text-bold">Grand Totals:</td>
+
+                          <td class="text-bold">
+                            {{ convert(stockTotals.totalDpValue.toFixed(2)) }}
+                          </td>
+
+                          <td class="text-bold">
+                            {{ stockTotals.totalBvValue.toFixed(2) }}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </q-card-section>
+              </q-card>
+            </q-card>
+          </template>
           <template v-if="form.reportType === 'queriedSales'">
             <!-- Exporter -->
             <reportExporter reportType="dailySales" :reportData="paginatedSales" />
@@ -1125,6 +1217,169 @@ const form = reactive({
 // Current date & time
 const currentDate = new Date().toLocaleString()
 
+// radio selection
+const stockFilter = ref('all')
+const stock = ref([]) // raw stock from Supabase
+const stockTotals = ref({
+  totalDpValue: 0,
+  totalBvValue: 0,
+})
+
+const fetchStock = async () => {
+  if (!form.dpccode) {
+    $q.notify({
+      message: 'No DPC selected!',
+      color: 'negative',
+      icon: 'warning',
+      position: 'top',
+    })
+    return
+  }
+
+  const tableName = `${form.dpccode}_STOCK`
+
+  try {
+    // 1) Fetch stock
+    const { data: stockData, error: stockError } = await supabase
+      .from(tableName)
+      .select('productcode, productname, quantity')
+      .order('productname', { ascending: true })
+
+    if (stockError) throw stockError
+
+    if (!stockData || !stockData.length) {
+      stock.value = []
+      stockTotals.value = { totalDpValue: 0, totalBvValue: 0 }
+      return
+    }
+
+    // 2) Prepare reactivity (VERY IMPORTANT)
+    // Create baseline with all fields so Vue tracks dpValue & bvValue
+    stock.value = stockData.map((item) => ({
+      productcode: item.productcode,
+      productname: item.productname,
+      quantity: Number(item.quantity) || 0,
+
+      // predefine these fields for Vue reactivity
+      distributorprice: 0,
+      bvs: 0,
+      dpValue: 0,
+      bvValue: 0,
+    }))
+
+    // 3) Get productcodes
+    const productCodes = stockData.map((i) => i.productcode)
+
+    // 4) Fetch distributorprice & bvs from products table
+    const { data: productsData, error: prodError } = await supabase
+      .from('products')
+      .select('productcode, distributorprice, bvs')
+      .in('productcode', productCodes)
+
+    if (prodError) throw prodError
+
+    // 5) Build lookup
+    const productLookup = {}
+    productsData.forEach((p) => {
+      productLookup[p.productcode] = p
+    })
+
+    // 6) Totals
+    let totalDpValue = 0
+    let totalBvValue = 0
+
+    // 7) Merge into reactive stock array
+    stock.value = stock.value.map((item) => {
+      const productInfo = productLookup[item.productcode] || {}
+
+      const distributorprice = Number(productInfo.distributorprice) || 0
+      const bvs = Number(productInfo.bvs) || 0
+      const qty = Number(item.quantity) || 0
+
+      const dpValue = distributorprice * qty
+      const bvValue = bvs * qty
+
+      totalDpValue += dpValue
+      totalBvValue += bvValue
+
+      return {
+        ...item,
+        distributorprice,
+        bvs,
+        dpValue,
+        bvValue,
+      }
+    })
+
+    // 8) Save totals
+    stockTotals.value = {
+      totalDpValue,
+      totalBvValue,
+    }
+  } catch (err) {
+    console.error('fetchStock error:', err.message)
+    stock.value = []
+    stockTotals.value = { totalDpValue: 0, totalBvValue: 0 }
+  }
+}
+
+// FILTER + SORT
+const filteredStock = computed(() => {
+  let result = stock.value
+
+  if (stockFilter.value === 'above20') {
+    result = result.filter((item) => item.quantity > 20)
+  } else if (stockFilter.value === 'below5') {
+    result = result.filter((item) => item.quantity < 5)
+  }
+
+  return result.sort((a, b) => a.quantity - b.quantity)
+})
+
+const rowColor = (qty) => {
+  if (qty <= 20) return 'row-red'
+  if (qty <= 50) return 'row-orange'
+  if (qty <= 100) return 'row-green'
+  return ''
+}
+
+// -------------------------------------------
+// WATCH DPC CODE → REFETCH WHEN IT CHANGES
+// -------------------------------------------
+watch(
+  () => form.dpccode,
+  async (newDpccode, oldDpccode) => {
+    if (newDpccode && newDpccode !== oldDpccode) {
+      await fetchStock()
+    }
+  },
+)
+
+watch(
+  () => form.dpccode,
+  (newVal) => {
+    if (newVal) {
+      localStorage.setItem('reportDpccode', newVal)
+    }
+  },
+)
+
+// FETCH STOCK ON MOUNTED
+onMounted(async () => {
+  const tableName = `${form.dpccode}_STOCK`
+
+  const { data, error } = await supabase
+    .from(tableName)
+    .select('productcode, productname, quantity')
+    .order('productname', { ascending: true })
+
+  if (!error) {
+    stock.value = data
+  } else {
+    console.error(error.message)
+  }
+})
+
 const exchangeRate = computed(() => store.headerData.exchangeRate)
 const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 // Status color mapping
@@ -1368,6 +1623,10 @@ const fetchData = async () => {
         // simplified: fetch raw sales; aggregation will be done in component
         await salesStore.fetchSalesRaw(form.startDate, form.endDate, dpccodeToUse)
         break
+      case 'stock':
+        // simplified: fetch raw sales; aggregation will be done in component
+        await fetchStock(dpccodeToUse)
+        break
 
       case 'queriedSales':
         await salesStore.fetchQueriedSales(form.startDate, form.endDate, dpccodeToUse)
@@ -1586,6 +1845,7 @@ const allReports = computed(() => [
   { label: $t('dailySales'), value: 'dailySales' },
   { label: $t('tallies'), value: 'tallys' },
   { label: $t('sales'), value: 'sales' },
+  { label: $t('mystock'), value: 'stock' },
   { label: $t('flaggedSales'), value: 'queriedSales' },
   { label: $t('bestCustomers'), value: 'bestCustomers' },
 ])
@@ -1594,9 +1854,15 @@ const reportOptions = computed(() => {
     return allReports.value
   }
   return allReports.value.filter((r) =>
-    ['personalBV', 'dailySales', 'tallys', 'sales', 'queriedSales', 'bestCustomers'].includes(
-      r.value,
-    ),
+    [
+      'personalBV',
+      'dailySales',
+      'tallys',
+      'sales',
+      'stock',
+      'queriedSales',
+      'bestCustomers',
+    ].includes(r.value),
   )
 })
 
@@ -1943,5 +2209,57 @@ td {
   background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='16' viewBox='0 0 24 24' width='16' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
   background-repeat: no-repeat;
   background-position: right 10px center;
+}
+.table-responsive {
+  overflow-x: auto;
+}
+
+.wrap-text {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 200px;
+}
+
+.stock-table .col-code {
+  width: 80px !important;
+  white-space: nowrap;
+}
+
+.stock-table .col-product {
+  width: 45%;
+}
+
+.stock-table .col-qty {
+  width: 70px;
+  text-align: center;
+}
+
+.stock-table .col-value {
+  width: 120px;
+  text-align: right;
+}
+
+/* Product wrapping max 2 lines then truncate */
+.product-wrap {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* show only 2 lines */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+/* Row colors depending on quantity */
+.row-red td {
+  color: #ff5252 !important;
+}
+
+.row-orange td {
+  color: #ff9800 !important;
+}
+
+.row-green td {
+  color: #4caf50 !important;
 }
 </style>

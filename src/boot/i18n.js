@@ -110,6 +110,7 @@ const messages = {
     onlyAdminsCanUnpend: 'Only Admin or SuperAdmin can unpend sales.',
     quantity: 'Quantity Available',
     dispatchLimitError: 'You cannot dispatch more than the available quantity.',
+    mystock: 'current Stock',
   },
 
   fr: {
@@ -218,6 +219,7 @@ const messages = {
     quantity: 'Quantité disponible',
 
     dispatchLimitError: 'Vous ne pouvez pas expédier plus que la quantité disponible.',
+    mystock: 'Stock Actuel',
   },
 }
 

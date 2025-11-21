@@ -281,6 +281,43 @@ const downloadExcel = () => {
     ])
 
     addSheet('Sales', sheetData)
+  } else if (props.reportType === 'stock') {
+    const sheetData = [
+      ['DYNAPHARM'],
+      ['STOCK REPORT'],
+      [`Period: ${form.startDate} - ${form.endDate}`],
+      [`DPC: ${(form.dpccode || '').toUpperCase()}`],
+      [],
+      ['Product Code', 'Product Name', 'Qty', 'DP Value', 'BV Value'],
+    ]
+
+    let totalQty = 0,
+      totalDP = 0,
+      totalBV = 0
+
+    props.reportData.forEach((item) => {
+      const qty = item.quantity || 0
+      const dp = item.dpValue || 0
+      const bv = item.bvValue || 0
+
+      sheetData.push([item.productcode, item.productname, qty, dp.toFixed(2), bv.toFixed(2)])
+
+      totalQty += qty
+      totalDP += dp
+      totalBV += bv
+    })
+
+    // Add grand totals row
+    sheetData.push(['Grand Totals', '', totalQty, totalDP.toFixed(2), totalBV.toFixed(2)])
+    sheetData.push([])
+    sheetData.push([
+      'Printed by',
+      auth.userDetails.firstname || 'System User',
+      'Date',
+      new Date().toLocaleString(),
+    ])
+
+    addSheet('Stock Report', sheetData)
   }
 
   XLSX.writeFile(wb, `${props.reportType}_${dayjs().format('YYYY-MM-DD')}.xlsx`)
@@ -483,6 +520,34 @@ const downloadPDF = () => {
     })
     grandTotals.amount += props.reportData.reduce((sum, s) => sum + (s.total || 0), 0)
     y = doc.lastAutoTable.finalY + 10
+  } else if (props.reportType === 'stock') {
+    autoTable(doc, {
+      startY: y,
+      head: [['Product Code', 'Product Name', 'Qty', 'DP Value', 'BV Value']],
+      body: props.reportData.map((item) => [
+        item.productcode,
+        item.productname,
+        item.quantity || 0,
+        (item.dpValue || 0).toFixed(2),
+        (item.bvValue || 0).toFixed(2),
+      ]),
+      styles: { fontSize: 9 },
+      margin: { left: margin, right: margin },
+    })
+
+    const finalY = doc.lastAutoTable.finalY
+
+    // Grand totals
+    const totalQty = props.reportData.reduce((sum, i) => sum + (i.quantity || 0), 0)
+    const totalDP = props.reportData.reduce((sum, i) => sum + (i.dpValue || 0), 0)
+    const totalBV = props.reportData.reduce((sum, i) => sum + (i.bvValue || 0), 0)
+
+    doc.setFont('helvetica', 'bold')
+    doc.text(`Total Qty: ${totalQty}`, margin, finalY + 8)
+    doc.text(`Total DP: ${totalDP.toFixed(2)}`, margin + 60, finalY + 8)
+    doc.text(`Total BV: ${totalBV.toFixed(2)}`, margin + 120, finalY + 8)
+
+    y = finalY + 16
   }
 
   // --- Grand Totals ---
