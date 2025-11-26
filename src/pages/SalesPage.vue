@@ -40,6 +40,7 @@
               :min="dateMin"
               :max="dateMax"
               popup-content-class="my-date-popup"
+              :disable="loading"
             />
           </div>
 
@@ -55,6 +56,7 @@
               class="white-input text-semi-bold text-center text-uppercase"
               input-class="text-white text-bold text-center text-uppercase"
               @blur="validateDistributorIDNO"
+              :disable="loading"
             />
           </div>
 
@@ -78,6 +80,7 @@
               outlined
               class="white-input text-semi-bold text-center text-uppercase"
               input-class="text-white text-bold text-center text-uppercase"
+              :disable="loading"
             />
           </div>
 
@@ -126,6 +129,7 @@
                   readonly
                   class="white-input full-width text-semi-bold text-center"
                   input-class="text-white text-bold text-center"
+                  :disable="loading"
                 />
               </div>
             </div>
@@ -143,6 +147,7 @@
                 class="white-input"
                 input-class="text-white text-bold text-center"
                 @blur="validateReceiptNo"
+                :disable="loading"
               />
             </div>
           </div>
@@ -202,6 +207,7 @@
                   class="white-input full-width"
                   input-class="text-white text-bold text-center"
                   @update:model-value="updateTotals"
+                  :disable="loading"
                 />
               </div>
 
@@ -216,6 +222,7 @@
                   readonly
                   class="white-input full-width"
                   input-class="text-white text-bold text-center"
+                  :disable="loading"
                 />
               </div>
 
@@ -230,6 +237,7 @@
                   readonly
                   class="white-input full-width"
                   input-class="text-white text-bold text-center"
+                  :disable="loading"
                 />
               </div>
             </div>
@@ -243,6 +251,7 @@
                   :label="$t('addProduct')"
                   class="full-width q-mt-sm"
                   @click="addProduct"
+                  :disable="disableAddButton"
                 />
               </div>
             </div>
@@ -300,8 +309,9 @@
           <q-btn
             :label="$t('submitSale')"
             color="light-green-14"
-            type="submit"
             class="full-width q-mt-md"
+            type="submit"
+            :loading="loading"
           />
         </q-form>
       </CurrencyToggle>
@@ -326,7 +336,7 @@ const { t: $t, locale } = useI18n()
 //const userStore = useAuth()
 const loading = ref(false)
 const availableQuantity = ref(0)
-
+import { toRaw } from 'vue'
 const searchQuery = ref('') // Search query for filtering
 const distributors = ref([])
 const filteredDistributors = ref([])
@@ -462,7 +472,17 @@ watch(selectedQuantity, (val) => {
   if (val < 1) selectedQuantity.value = 1
 })
 
-// Update when a product is selected
+watch(selectedQuantity, (newQty) => {
+  if (selectedProduct.value && availableQuantity.value > 0 && newQty > availableQuantity.value) {
+    $q.notify({
+      type: 'negative',
+      message: 'Quantity entered exceeds available stock.',
+      position: 'center',
+      icon: 'warning',
+    })
+  }
+})
+
 async function updateSelectedProduct(code) {
   selectedProduct.value = store.products.find((p) => p.productcode === code)
 
@@ -471,9 +491,9 @@ async function updateSelectedProduct(code) {
     unitBV.value = selectedProduct.value.bvs
     selectedQuantity.value = 1
 
-    // 🔹 Get available quantity from DPC stock table
     if (form.dpccode) {
-      const fromTable = `${form.dpccode}_STOCK` // e.g., "RCD_STOCK"
+      const fromTable = `${form.dpccode}_STOCK`
+
       const { data, error } = await supabase
         .from(fromTable)
         .select('quantity')
@@ -481,7 +501,7 @@ async function updateSelectedProduct(code) {
         .maybeSingle()
 
       if (error) {
-        console.error('Error fetching stock quantity:', error.message)
+        console.error('Error fetching stock:', error.message)
         availableQuantity.value = 0
       } else {
         availableQuantity.value = data ? data.quantity : 0
@@ -492,13 +512,19 @@ async function updateSelectedProduct(code) {
   }
 }
 
-// Update totals when quantity changes
-//function updateTotals() {
-// if (selectedProduct.value) {
-//    totalPrice.value = selectedProduct.value.distributorprice * selectedQuantity.value
-//    totalBV.value = selectedProduct.value.bvs * selectedQuantity.value
-//  }
-//}
+const disableAddButton = computed(() => {
+  // No product selected
+  if (!selectedProduct.value) return true
+
+  // No stock or negative stock
+  if (availableQuantity.value <= 0) return true
+
+  // Quantity entered is invalid or exceeds stock
+  if (selectedQuantity.value > availableQuantity.value) return true
+
+  // Valid: button enabled
+  return false
+})
 
 import { Notify } from 'quasar'
 
@@ -789,77 +815,80 @@ const validateReceiptNo = async () => {
 }
 
 const submitSale = async () => {
+  if (loading.value) return
+
   loading.value = true
 
   try {
-    // ✅ Basic header validation
+    // 1️⃣ Basic header validation
     if (!form.receiptno || !form.salesdate || !form.distributoridno) {
       $q.notify({
         type: 'negative',
-
         message: $t('fillRequiredHeader'),
         position: 'center',
       })
       return
     }
 
-    // ✅ Ensure at least one product is added
+    // 2️⃣ At least one product
     if (!form.items || form.items.length === 0) {
       $q.notify({
         type: 'negative',
-
         message: $t('addAtLeastOneProduct'),
         position: 'center',
       })
       return
     }
 
-    // 🔹 Enforce prefix on receipt number
+    // 3️⃣ DPC prefix
     if (form.dpccode && !form.receiptno.startsWith(form.dpccode)) {
       form.receiptno = `${form.dpccode}${form.receiptno}`
     }
 
-    // 🔹 Send to store as-is (no conversion)
-    await store.submitSale(form)
+    // 4️⃣ Safe deep clone
+    const payload = JSON.parse(JSON.stringify(toRaw(form)))
 
-    // ✅ Notify success
+    // 5️⃣ Submit
+    const result = await store.submitSale(payload)
+    if (!result.success) throw result.error
+
+    // 6️⃣ Success
     $q.notify({
       type: 'positive',
-
       message: $t('saleSubmitted'),
       position: 'center',
     })
 
-    // ✅ Reset form after submission, preserve exchangeRate
-    const currentRate = form.exchangeRate
-    const today = new Date()
-    const yyyyToday = today.getFullYear()
-    const mmToday = String(today.getMonth() + 1).padStart(2, '0')
-    const ddToday = String(today.getDate()).padStart(2, '0')
-
-    Object.assign(form, {
-      receiptno: '',
-      salesdate: `${yyyyToday}-${mmToday}-${ddToday}`, // reload with today's date
-      distributoridno: '',
-      createdby: auth.userDetails.firstname,
-      lastModifiedby: auth.userDetails.firstname,
-      entrysource: 'app',
-      entered_by: auth.id,
-      items: [],
-      exchangeRate: currentRate,
-    })
-
-    searchQuery.value = ''
+    // 7️⃣ Reset
+    resetForm()
   } catch (err) {
-    console.error('Submission error:', err)
     $q.notify({
       type: 'negative',
-      message: `Error submitting sale: ${err.message || err}`,
+      message: `${$t('error')}: ${err.message || err}`,
       position: 'center',
     })
   } finally {
     loading.value = false
   }
+}
+
+function resetForm() {
+  const currentRate = form.exchangeRate
+  const today = new Date()
+
+  Object.assign(form, {
+    receiptno: '',
+    salesdate: today.toISOString().slice(0, 10),
+    distributoridno: '',
+    createdby: auth.userDetails.firstname,
+    lastModifiedby: auth.userDetails.firstname,
+    entrysource: 'app',
+    entered_by: auth.id,
+    items: [],
+    exchangeRate: currentRate,
+  })
+
+  searchQuery.value = ''
 }
 
 // ----------------------------

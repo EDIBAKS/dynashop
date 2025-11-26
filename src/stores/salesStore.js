@@ -102,6 +102,9 @@ export const useSalesStore = defineStore('salesStore', {
         ])
 
         if (headerError) throw headerError
+        if (!form.items || form.items.length === 0) {
+          throw new Error('Cannot submit sale with no items')
+        }
 
         for (const item of form.items) {
           const { productcode, quantity } = item

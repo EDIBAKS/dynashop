@@ -111,6 +111,10 @@ const messages = {
     quantity: 'Quantity Available',
     dispatchLimitError: 'You cannot dispatch more than the available quantity.',
     mystock: 'current Stock',
+    submitSaleTitle: 'Submit Sale',
+    submitSaleConfirm: 'Are you sure you want to submit this sale?',
+
+    submitError: 'Error submitting sale: {error}',
   },
 
   fr: {
@@ -220,6 +224,8 @@ const messages = {
 
     dispatchLimitError: 'Vous ne pouvez pas expédier plus que la quantité disponible.',
     mystock: 'Stock Actuel',
+    submitSaleTitle: 'Soumettre la vente',
+    submitSaleConfirm: 'Êtes-vous sûr de vouloir soumettre cette vente ?',
   },
 }
 
