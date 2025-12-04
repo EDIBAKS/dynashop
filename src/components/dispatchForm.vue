@@ -104,7 +104,7 @@
         <!-- Searchable Select -->
         <q-select
           v-model="selectedProduct"
-          :options="activeProducts"
+          :options="filteredProducts"
           option-label="productname"
           option-value="productcode"
           label="Select Product"
@@ -275,6 +275,7 @@ const newProduct = reactive({
 // ✅ Option lists
 const provinceOptions = ref([])
 const activeProducts = ref([])
+const filteredProducts = ref([])
 
 // ✅ Validation
 const canAddProduct = computed(
@@ -303,16 +304,33 @@ async function fetchProvinces() {
   }
 }
 
-// 🟩 Fetch active products
 async function fetchActiveProducts() {
   const { data, error } = await supabase
     .from('products')
     .select('productname, productcode')
     .eq('status', 'active')
 
-  if (!error) activeProducts.value = data
+  if (!error) {
+    activeProducts.value = data
+    filteredProducts.value = data // initialize search list
+  }
 }
 
+function filterProducts(val, update) {
+  if (val === '') {
+    update(() => {
+      filteredProducts.value = activeProducts.value
+    })
+    return
+  }
+
+  update(() => {
+    const needle = val.toLowerCase()
+    filteredProducts.value = activeProducts.value.filter((p) =>
+      p.productname.toLowerCase().includes(needle),
+    )
+  })
+}
 // =======================================================
 // 🟨 Identify the correct stock table based on dispatchType
 // =======================================================
