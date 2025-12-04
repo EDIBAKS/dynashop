@@ -128,8 +128,8 @@
             :label="$t('fabReports')"
             class="fab-action-uniform"
           />
-
-          <q-fab-action
+          <!--
+  <q-fab-action
             v-if="isAdmin"
             label-position="right"
             icon="outbound"
@@ -138,7 +138,9 @@
             :text-color="activeTab === 'stock' ? 'light-green-14' : 'white'"
             label="Stock"
             class="fab-action-uniform"
-          />
+          />        
+-->
+
           <q-fab-action
             label-position="right"
             icon="outbound"
@@ -194,7 +196,7 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from 'stores/auth'
 import { useRouter } from 'vue-router'
-const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
+//const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 const auth = useAuth()
 import { useRoute } from 'vue-router'
 const router = useRouter()
@@ -254,10 +256,10 @@ const goToReports = () => {
   activeTab.value = 'reports'
   router.push({ name: 'reports' })
 }
-const goToStock = () => {
-  activeTab.value = 'stock'
-  router.push({ name: 'stock' })
-}
+//const goToStock = () => {
+// activeTab.value = 'stock'
+// router.push({ name: 'stock' })
+//}
 const goToAdmin = () => {
   activeTab.value = 'admin'
   router.push({ name: 'admin' })

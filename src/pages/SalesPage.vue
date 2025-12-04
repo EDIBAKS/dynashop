@@ -146,6 +146,7 @@
                 ref="receiptInput"
                 class="white-input"
                 input-class="text-white text-bold text-center"
+                input-style="text-transform: uppercase"
                 @blur="validateReceiptNo"
                 :disable="loading"
               />
@@ -185,10 +186,7 @@
               </div>
             </div>
             <div class="row q-col-gutter-sm q-mt-sm">
-              <div
-                class="col text-white bg-blue-grey-10 text-bold q-ml-sm q-mb-sm rounded-borders flex flex-center"
-                style="font-size: 1.1rem; text-align: center"
-              >
+              <div class="col bg-transparent quantity-label flex flex-center">
                 {{ $t('quantity') }}: {{ availableQuantity }}
               </div>
             </div>
@@ -204,7 +202,7 @@
                   type="number"
                   dense
                   outlined
-                  class="white-input full-width"
+                  class="full-width"
                   input-class="text-white text-bold text-center"
                   @update:model-value="updateTotals"
                   :disable="loading"
@@ -1020,8 +1018,8 @@ watch(
 }
 /* Apply to all outlined inputs/selects inside your form */
 .custom-form ::v-deep(.q-field--outlined .q-field__control) {
-  border: 2px solid #b6acac !important; /* darker border */
-  border-radius: 8px; /* optional: smoother edges */
+  border: 1px solid #5eee42 !important; /* darker border */
+  border-radius: 4px; /* optional: smoother edges */
 }
 
 /* Stronger border on hover */
@@ -1136,5 +1134,16 @@ watch(
 .q-date__view--years .q-date__years-item.q-date__years-item--inactive {
   color: orange !important; /* Make inactive months/years orange */
   opacity: 1 !important; /* Ensure full visibility */
+}
+.quantity-label {
+  width: 100%;
+  padding: 12px;
+
+  color: white;
+  font-size: 1.2rem;
+  font-weight: semi-bold;
+
+  border-radius: 10px;
+  text-align: center;
 }
 </style>
