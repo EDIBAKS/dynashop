@@ -840,26 +840,26 @@ const submitSale = async () => {
       return
     }
 
-    // 3️⃣ DPC prefix
+    // 3️⃣ Add DPC prefix to receipt if missing
     if (form.dpccode && !form.receiptno.startsWith(form.dpccode)) {
       form.receiptno = `${form.dpccode}${form.receiptno}`
     }
 
-    // 4️⃣ Safe deep clone
+    // 4️⃣ Clean deep clone (required)
     const payload = JSON.parse(JSON.stringify(toRaw(form)))
 
-    // 5️⃣ Submit
+    // 5️⃣ Submit to store → RPC transaction
     const result = await store.submitSale(payload)
     if (!result.success) throw result.error
 
-    // 6️⃣ Success
+    // 6️⃣ Success message
     $q.notify({
       type: 'positive',
       message: $t('saleSubmitted'),
       position: 'center',
     })
 
-    // 7️⃣ Reset
+    // 7️⃣ Reset form
     resetForm()
   } catch (err) {
     $q.notify({

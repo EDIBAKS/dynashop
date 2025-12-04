@@ -85,8 +85,29 @@
             <!-- Reports Tab -->
             <q-tab-panel name="StockReport">
               <div class="text-h6">📊 Reports</div>
-              <stockMonitor />
+
+              <!-- 🔥 RADIO BUTTONS -->
+              <div class="row q-gutter-md q-mt-md">
+                <q-option-group
+                  v-model="displayMode"
+                  :options="[
+                    { label: 'List View', value: 'list' },
+                    { label: 'Table View', value: 'table' },
+                  ]"
+                  type="radio"
+                  color="primary"
+                />
+              </div>
+
+              <div class="q-mt-md">
+                <!-- 🔥 SHOW LIST VIEW -->
+                <stockMonitor v-if="displayMode === 'list'" />
+
+                <!-- 🔥 SHOW TABLE VIEW -->
+                <stockTable v-else />
+              </div>
             </q-tab-panel>
+
             <q-tab-panel name="Extraction">
               <div class="text-h6">📊 Admin Only</div>
               <ExxtractionPage />
@@ -114,6 +135,7 @@ import { useAuth } from 'stores/auth'
 import dispatchForm from '../components/dispatchForm.vue'
 import WithdrawForm from 'src/components/withdrawForm.vue'
 import stockMonitor from 'src/components/stockMonitor.vue'
+import stockTable from 'src/components/stockTable.vue'
 import ExxtractionPage from 'src/components/ExxtractionPage.vue'
 import dispatchReport from 'src/components/dispatchReport.vue'
 import WithdrawReport from 'src/components/WithdrawReport.vue'
@@ -122,6 +144,7 @@ const currentDate = ref('')
 const tab = ref('Dispatch')
 const isAdmin = computed(() => auth.userDetails?.role === 'Admin')
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
+const displayMode = ref('list') // 'list' or 'table'
 
 function getCurrentDate() {
   const today = new Date()

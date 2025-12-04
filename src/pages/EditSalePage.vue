@@ -76,6 +76,7 @@
             />
 
             <!-- Qty -->
+            <!-- Qty -->
             <q-input
               v-model.number="item.quantity"
               type="number"
@@ -83,7 +84,13 @@
               dense
               outlined
               class="col-4 col-sm-2 text-center"
-              @update:model-value="recalcItem(item)"
+              :disable="item.availableQty === 0"
+              @update:model-value="
+                () => {
+                  validateQuantity(item)
+                  recalcItem(item)
+                }
+              "
             />
 
             <!-- Price -->
@@ -107,6 +114,7 @@
               readonly
               class="col-4 col-sm-2 text-center"
             />
+            <div class="text-caption text-blue q-ml-sm">Available: {{ item.availableQty }}</div>
 
             <!-- Buttons Row (stacks below on mobile) -->
             <div class="col-12 flex justify-center q-mt-xs">
@@ -139,7 +147,7 @@
       </q-card-section>
 
       <q-card-actions align="right">
-        <q-spinner-hourglass color="light-green-14" size="30px" />
+        <q-spinner-hourglass v-if="loading" color="light-green-14" size="30px" />
         <q-btn flat label="Cancel" @click="$router.back()" />
         <q-btn color="primary" label="Save" @click="submitUpdate" />
       </q-card-actions>
@@ -148,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSaleStore } from '../stores/storeSales' // adjust path to your file
 import { useQuasar } from 'quasar'
@@ -320,9 +328,6 @@ const deleteEntireReceipt = async () => {
 onMounted(async () => {
   const { data } = await supabase.from('Distributors').select('DistributorIDNO, DistributorNames')
   distributors.value = data || []
-})
-
-onMounted(async () => {
   const receiptno = route.params.receiptno
   if (!receiptno) return
 
@@ -355,6 +360,12 @@ onMounted(async () => {
   if (sale && sale.dpccode) {
     form.value.dpccode = sale.dpccode
   }
+  if (sale) {
+    for (const item of form.value.salesdetails) {
+      item.availableQty = 0
+      await loadStockForItem(item)
+    }
+  }
 })
 
 // Add a new blank product line
@@ -364,19 +375,82 @@ const addProduct = () => {
     unitprice: 0,
     unitbv: 0,
     quantity: 1,
+    availableQty: 0, // 👈 new
   })
+}
+
+watch(
+  () => form.value.dpccode,
+  async (newDpc) => {
+    if (!newDpc) return
+
+    for (const item of form.value.salesdetails) {
+      await loadStockForItem(item)
+    }
+  },
+)
+
+watch(
+  () => form.value.salesdetails.map((i) => i.productcode),
+  async () => {
+    for (const item of form.value.salesdetails) {
+      await loadStockForItem(item)
+    }
+  },
+)
+
+async function loadStockForItem(item) {
+  if (!form.value.dpccode || !item.productcode) {
+    item.availableQty = 0
+    return
+  }
+
+  const table = `${form.value.dpccode}_STOCK`
+
+  const { data } = await supabase
+    .from(table)
+    .select('quantity')
+    .eq('productcode', item.productcode)
+    .maybeSingle()
+
+  item.availableQty = data ? data.quantity : 0
+}
+
+const validateQuantity = (item) => {
+  // When stock is zero → lock quantity at 0
+  if (item.availableQty === 0) {
+    item.quantity = 0
+    return
+  }
+
+  // User typed more than in stock → correct it
+  if (item.quantity > item.availableQty) {
+    item.quantity = item.availableQty
+
+    $q.notify({
+      type: 'warning',
+      message: `Only ${item.availableQty} items available in stock`,
+    })
+  }
+
+  // Prevent negative, zero, or null
+  if (!item.quantity || item.quantity < 1) {
+    item.quantity = 1
+  }
 }
 
 // Remove product row (with confirm + delete in DB)
 
 // Update price + BV when product selected
-const updateProductDetails = (item) => {
+const updateProductDetails = async (item) => {
   const product = products.value.find((p) => p.productcode === item.productcode)
   if (product) {
     item.unitprice = product.distributorprice
     item.unitbv = product.bvs
     item.quantity = 1
   }
+
+  await loadStockForItem(item) // 👈 NEW
 }
 
 // Recalculate totals when qty changes (optional if you need line totals later)
@@ -407,48 +481,28 @@ async function updateLog({ from, to, productcode, quantity, dispatchedby, status
   }
 }
 
-// 🧮 Main submit update function
 const submitUpdate = async () => {
   try {
     if (!form.value.dpccode) {
-      $q.notify({
-        type: 'negative',
-        message: 'DPC code is required to update stock!',
-      })
+      $q.notify({ type: 'negative', message: 'DPC code is required!' })
+      return
+    }
+
+    // Validate that there is something to update
+    if (
+      (!changedItems.value || changedItems.value.length === 0) &&
+      (!deletedItems.value || deletedItems.value.length === 0)
+    ) {
+      $q.notify({ type: 'negative', message: 'No changes detected for update.' })
       return
     }
 
     loading.value = true
+    const currentUser = form.value.lastmodifiedby || 'system'
     const stockTable = `${form.value.dpccode}_STOCK`
-    const currentUser = 'system'
 
-    // Case 1: Entire receipt deleted
-    if (form.value.salesdetails.length === 0) {
-      // Delete sales data
-      await supabase.from('salesdetails').delete().eq('receiptno', form.value.receiptno)
-      await supabase.from('salesheader').delete().eq('receiptno', form.value.receiptno)
-
-      // Log deletion
-      await updateLog({
-        from: 'SALES',
-        to: form.value.dpccode,
-        productcode: 'ALL',
-        quantity: 0,
-        dispatchedby: currentUser,
-        status: `Deleted entire receipt ${form.value.receiptno}`,
-      })
-
-      $q.notify({
-        type: 'positive',
-        message: 'Receipt deleted successfully.',
-      })
-
-      router.back()
-      return
-    }
-
-    // Case 2: Deleted items — restore to stock
-    for (const item of deletedItems.value) {
+    // 1️⃣ Handle deleted items — restore stock
+    for (const item of deletedItems.value || []) {
       const { data: stockData } = await supabase
         .from(stockTable)
         .select('quantity')
@@ -476,90 +530,54 @@ const submitUpdate = async () => {
       })
     }
 
-    // Case 3 & 4: Changed and new items
-    for (const item of changedItems.value) {
-      const { data: oldItem } = await supabase
-        .from('salesdetails')
-        .select('quantity')
-        .eq('receiptno', form.value.receiptno)
-        .eq('productcode', item.productcode)
-        .maybeSingle()
-
-      const { data: stockData } = await supabase
-        .from(stockTable)
-        .select('quantity')
-        .eq('productcode', item.productcode)
-        .single()
-
-      const currentStock = stockData?.quantity || 0
-      let newQty = currentStock
-      let diff = 0
-
-      if (oldItem) {
-        diff = oldItem.quantity - item.quantity
-        newQty = currentStock + diff
-      } else {
-        diff = -item.quantity
-        newQty = currentStock - item.quantity
-      }
-
-      await supabase
-        .from(stockTable)
-        .update({
-          quantity: newQty,
-          lastmodified: new Date(),
-          modifiedby: currentUser,
-        })
-        .eq('productcode', item.productcode)
-
-      await updateLog({
-        from: 'SALES',
-        to: form.value.dpccode,
+    // 2️⃣ Build payload for added/updated items
+    const payload = {
+      receiptno: form.value.receiptno,
+      distributoridno: form.value.distributoridno,
+      dpccode: form.value.dpccode,
+      salesdate: form.value.salesdate,
+      lastmodifiedby: currentUser,
+      items: (changedItems.value || []).map((item) => ({
         productcode: item.productcode,
-        quantity: Math.abs(diff),
-        dispatchedby: currentUser,
-        status: oldItem
-          ? diff > 0
-            ? 'Reduced sale quantity — stock increased'
-            : 'Increased sale quantity — stock decreased'
-          : 'New item added to sale — stock decreased',
-      })
+        quantity: item.quantity,
+        unitprice: item.unitprice,
+        unitbv: item.unitbv,
+      })),
     }
 
-    // Case 5: Update sales header
-    await salesStore.updateReceipt({
-      header: {
-        receiptno: form.value.receiptno,
-        distributoridno: form.value.distributoridno,
-        dpccode: form.value.dpccode,
-        salesdate: form.value.salesdate,
-      },
-      deletedItems: deletedItems.value,
-      changedItems: changedItems.value,
-    })
+    // 3️⃣ Call RPC to update sales + stock for added/changed items
+    if (payload.items.length > 0) {
+      const { error } = await supabase.rpc('update_sales_transaction', { payload })
+      if (error) throw error
 
-    // Log sales header update
+      // Log each updated/added item
+      for (const item of payload.items) {
+        await updateLog({
+          from: 'SALES',
+          to: payload.dpccode,
+          productcode: item.productcode,
+          quantity: item.quantity,
+          dispatchedby: currentUser,
+          status: 'Updated/Added item — stock adjusted',
+        })
+      }
+    }
+
+    // 4️⃣ Log header update
     await updateLog({
       from: 'SALES',
-      to: form.value.dpccode,
+      to: payload.dpccode,
       productcode: 'HEADER',
       quantity: 0,
       dispatchedby: currentUser,
-      status: `Updated receipt info for ${form.value.receiptno}`,
+      status: `Updated receipt info for ${payload.receiptno}`,
     })
 
-    $q.notify({
-      type: 'positive',
-      message: 'Sale and stock updated successfully!',
-    })
-
+    $q.notify({ type: 'positive', message: 'Sale and stock updated successfully!' })
     router.back()
   } catch (err) {
     console.error('Update failed:', err)
-    $q.notify({
-      type: 'negative',
-      message: err.message || 'Update failed!',
-    })
+    $q.notify({ type: 'negative', message: err.message || 'Update failed!' })
   } finally {
     loading.value = false
   }

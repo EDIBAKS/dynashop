@@ -853,54 +853,46 @@
 
                 <!-- TABLE -->
                 <q-card-section>
-                  <div class="table-responsive">
-                    <table
-                      class="q-table q-table--flat q-table--dense stock-table"
-                      style="width: 100%"
+                  <div>
+                    <q-table
+                      title="Stock Summary"
+                      :rows="filteredStock"
+                      :columns="columns2"
+                      row-key="productcode"
+                      flat
+                      bordered
+                      dense
+                      separator="cell"
+                      :pagination="{ rowsPerPage: 0 }"
+                      class="stock-table"
                     >
-                      <thead>
-                        <tr>
-                          <th class="col-code">Code</th>
-                          <th class="col-product">Product</th>
-                          <th class="col-qty">Qty</th>
-                          <th class="col-value">DP Value</th>
-                          <th class="col-value">BV Value</th>
-                        </tr>
-                      </thead>
+                      <!-- Quantity cell color logic -->
+                      <template #body-cell-quantity="props">
+                        <q-td :props="props" :class="rowColor(props.row.quantity)">
+                          {{ props.row.quantity }}
+                        </q-td>
+                      </template>
 
-                      <tbody>
-                        <tr
-                          v-for="item in filteredStock"
-                          :key="item.productcode"
-                          :class="rowColor(item.quantity)"
-                        >
-                          <td>{{ item.productcode }}</td>
+                      <!-- Product name wrap / ellipsis -->
+                      <template #body-cell-productname="props">
+                        <q-td :props="props">
+                          <div class="product-wrap">
+                            {{ props.row.productname }}
+                          </div>
+                        </q-td>
+                      </template>
 
-                          <!-- Product name wraps up to 2 lines then truncates -->
-                          <td class="product-wrap">{{ item.productname }}</td>
-
-                          <!-- Quantity with color rules -->
-                          <td class="text-center">{{ item.quantity }}</td>
-
-                          <td>{{ convert(item.dpValue.toFixed(2)) }}</td>
-                          <td>{{ item.bvValue.toFixed(2) }}</td>
-                        </tr>
-                      </tbody>
-
-                      <tfoot>
-                        <tr>
-                          <td colspan="3" class="text-right text-bold">Grand Totals:</td>
-
-                          <td class="text-bold">
-                            {{ convert(stockTotals.totalDpValue.toFixed(2)) }}
-                          </td>
-
-                          <td class="text-bold">
-                            {{ stockTotals.totalBvValue.toFixed(2) }}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                      <!-- Footer totals -->
+                      <template #bottom-row>
+                        <q-tr>
+                          <q-td colspan="3" class="text-right text-bold">Grand Totals:</q-td>
+                          <q-td class="text-bold">{{
+                            convert(stockTotals.totalDpValue.toFixed(2))
+                          }}</q-td>
+                          <q-td class="text-bold">{{ stockTotals.totalBvValue.toFixed(2) }}</q-td>
+                        </q-tr>
+                      </template>
+                    </q-table>
                   </div>
                 </q-card-section>
               </q-card>
@@ -1447,6 +1439,44 @@ const columns = [
     name: 'TotalBV',
     label: 'Total BV',
     field: 'TotalBV',
+    align: 'right',
+    sortable: true,
+  },
+]
+
+const columns2 = [
+  {
+    name: 'productcode',
+    label: 'Code',
+    field: 'productcode',
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'productname',
+    label: 'Product',
+    field: 'productname',
+    align: 'left',
+    sortable: true,
+  },
+  {
+    name: 'quantity',
+    label: 'Qty',
+    field: 'quantity',
+    align: 'center',
+    sortable: true,
+  },
+  {
+    name: 'dpValue',
+    label: 'DP Value',
+    field: (row) => row.dpValue.toFixed(2),
+    align: 'right',
+    sortable: true,
+  },
+  {
+    name: 'bvValue',
+    label: 'BV Value',
+    field: (row) => row.bvValue.toFixed(2),
     align: 'right',
     sortable: true,
   },
@@ -2219,24 +2249,17 @@ td {
   word-break: break-word;
   max-width: 200px;
 }
-
-.stock-table .col-code {
-  width: 80px !important;
-  white-space: nowrap;
+.stock-table .product-wrap {
+  white-space: normal !important;
+  line-height: 1.2em;
+  max-height: 2.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.stock-table .col-product {
-  width: 45%;
-}
-
-.stock-table .col-qty {
-  width: 70px;
-  text-align: center;
-}
-
-.stock-table .col-value {
-  width: 120px;
-  text-align: right;
+.stock-table th,
+.stock-table td {
+  border: 1px solid #e0e0e0 !important;
 }
 
 /* Product wrapping max 2 lines then truncate */
