@@ -109,7 +109,7 @@
                 <div class="select-wrapper">
                   <select
                     v-model="form.dpccode"
-                    class="custom-select full-width text-center bg-blue-grey-10"
+                    class="custom_select native-select full-width text-center bg-blue-grey-10"
                   >
                     <option v-for="option in dpcOptions" :key="option.value" :value="option.value">
                       {{ option.label }}
@@ -1117,6 +1117,27 @@ watch(
   background-position: right 10px center;
   background-size: 16px;
   padding-right: 32px; /* make room for arrow */
+}
+
+.native-select {
+  width: 120px;
+  background-color: #263238;
+  color: white; /* white text */
+  border: 1px solid white; /* white outline */
+  border-radius: 6px; /* rounded corners */
+  padding: 8px; /* inner spacing */
+  height: 38px; /* CONTROL HEIGHT */
+  appearance: none; /* remove default arrow */
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* Optional: add custom dropdown arrow on the right (cleaner UI) */
+.native-select {
+  background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='16' viewBox='0 0 24 24' width='16' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 .custom-list {
   border-color: white !important; /* Makes outer border white */

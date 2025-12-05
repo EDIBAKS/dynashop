@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Label -->
-    <div class="text-caption text-green-10 text-bold q-mb-xs flex justify-between items-center">
+    <div class="text-caption text-white text-bold q-mb-xs flex justify-between items-center">
       <span>{{ $t('searchByName') }}</span>
       <span
         v-if="searchQuery.trim() !== '' && !filteredDistributors.length && !confirmedDistributor"
@@ -17,7 +17,9 @@
       dense
       outlined
       class="white-input text-semi-bold text-center text-uppercase"
-      input-class="text-black text-bold text-center text-uppercase"
+      input-class="text-white text-bold text-center text-uppercase"
+      label="Type Distributor Name..."
+      label-color="white"
     />
 
     <!-- Suggestions -->

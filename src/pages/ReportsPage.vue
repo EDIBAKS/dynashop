@@ -47,7 +47,16 @@
             {{ $t('report') }}
           </div>
           <div class="select-wrapper">
-            <select v-model="form.reportType" class="custom-select full-width text-center">
+            <select
+              v-model="form.reportType"
+              class="custom-select native-select full-width text-center"
+            >
+              <!-- Default translated placeholder -->
+              <option value="">
+                {{ $t('select_report_type') }}
+              </option>
+
+              <!-- Real selectable options -->
               <option v-for="option in reportOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
@@ -134,8 +143,10 @@
             label="Distributor ID"
             dense
             outlined
+            caps
             class="q-mt-md"
             input-class="text-center text-white text-bold"
+            @update:model-value="(val) => (form.distributoridno = val.toUpperCase())"
           />
 
           <!-- Distributor Search -->
@@ -1203,7 +1214,7 @@ const form = reactive({
   startDate: localStorage.getItem('reportStartDate') || getFirstDayOfMonth(),
   endDate: localStorage.getItem('reportEndDate') || getLastDayOfMonth(),
   dpccode: localStorage.getItem('reportDpccode') || '', // 🔹 load last selected DPC
-  reportType: 'dailySales',
+  reportType: '',
   distributoridno: '',
 })
 // Current date & time
@@ -2057,7 +2068,7 @@ const rowsPerPage = ref(5) // default 5
 const currentPage = ref(1)
 
 // Options for user
-const pageOptions = [5, 15, 'All']
+const pageOptions = [5, 10, 20, 50, 'All']
 
 // Sort sales by receiptno
 const sortedSales = computed(() => {
@@ -2176,7 +2187,7 @@ td {
   width: 100%;
   padding: 8px;
   border: 1px solid white;
-  border-radius: 8px;
+  border-radius: 4px;
   background-color: #263238; /* matches Quasar bg-blue-grey-10 */
   color: white;
   text-align: center;
@@ -2185,8 +2196,8 @@ td {
   max-width: 100%; /* prevent overflow */
 }
 .pagination-select {
-  background-color: #263238; /* Dark background */
-  border-radius: 12px; /* Rounded corners */
+  background-color: #4caf50; /* Dark background */
+  border-radius: 4px; /* Rounded corners */
 }
 
 /* Control the height */
@@ -2208,24 +2219,24 @@ td {
 
 /* White border when outlined */
 .pagination-select .q-field__control {
-  border-color: white !important;
+  border-color: #4caf50 !important;
 }
 
 .custom-select option {
-  background-color: #263238; /* matches Quasar bg-blue-grey-10 */
+  background-color: transparent; /* matches Quasar bg-blue-grey-10 */
   color: white;
 }
 
 .custom-select:focus {
   outline: none;
-  border-color: #00bfa5;
+  border-color: #0d47a1;
 }
 .native-select {
   width: 120px;
   background-color: #263238;
   color: white; /* white text */
   border: 1px solid white; /* white outline */
-  border-radius: 12px; /* rounded corners */
+  border-radius: 6px; /* rounded corners */
   padding: 8px; /* inner spacing */
   height: 38px; /* CONTROL HEIGHT */
   appearance: none; /* remove default arrow */
@@ -2284,5 +2295,22 @@ td {
 
 .row-green td {
   color: #4caf50 !important;
+}
+
+/* Apply to all outlined inputs/selects inside your form */
+.custom-form ::v-deep(.q-field--outlined .q-field__control) {
+  border: 1px solid #5eee42 !important; /* darker border */
+  border-radius: 4px; /* optional: smoother edges */
+}
+
+/* Stronger border on hover */
+.custom-form ::v-deep(.q-field--outlined:hover .q-field__control) {
+  border-color: #111 !important;
+}
+
+/* Stronger + colored border when focused */
+.custom-form ::v-deep(.q-field--outlined.q-field--focused .q-field__control) {
+  border: 2px solid #0d47a1 !important; /* deep blue when focused */
+  box-shadow: 0 0 4px rgba(13, 71, 161, 0.5); /* optional glow */
 }
 </style>

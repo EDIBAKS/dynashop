@@ -1,99 +1,71 @@
 <template>
   <q-page class="q-pa-md">
-    <q-card style="max-width: 600px; margin: auto">
+    <q-card class="q-pa-md" style="max-width: 800px; margin: auto; position: relative">
+      <!-- HEADER -->
       <q-card-section>
-        <div class="text-h6">
-          Edit Sale
-          <div class="text-green-14 text-subtitle2">
-            {{ form.receiptno }}<br />
-            Sales Date: {{ formatDate(form.salesdate) }}
+        <div class="text-h6">Edit Sale</div>
+        <div class="q-mt-sm">
+          <q-input v-model="form.distributoridno" label="Distributor ID" dense outlined />
+        </div>
+        <div class="q-mt-sm">
+          <DistributorSearch v-model="form.distributoridno" v-model:name="form.distributorname" />
+        </div>
+        <div class="q-mt-sm row q-col-gutter-sm">
+          <div class="col">
+            <q-select
+              v-model="form.dpccode"
+              :options="dpcs"
+              option-value="dpccode"
+              option-label="dpcname"
+              label="DPC"
+              dense
+              outlined
+              emit-value
+              map-options
+            />
+          </div>
+          <div class="col">
+            <q-input v-model="form.salesdate" label="Sales Date" type="date" dense outlined />
           </div>
         </div>
       </q-card-section>
 
+      <!-- PRODUCT LIST -->
       <q-card-section>
-        <q-input v-model="form.distributoridno" label="Distributor ID" dense outlined />
-        <!-- Distributor Search -->
-        <div class="q-mb-sm">
-          <!-- Distributor Search -->
-          <DistributorSearch v-model="form.distributoridno" v-model:name="form.distributorname" />
-
-          <!-- Debug -->
-          <!--<div class="q-mt-md">Selected ID: {{ form.distributoridno }}</div>  -->
-        </div>
-
-        <ul v-if="filteredDistributors.length && searchQuery.trim() !== ''" class="suggestion-list">
-          <li
-            v-for="dist in filteredDistributors"
-            :key="dist.DistributorIDNO"
-            @click="selectDistributor(dist)"
-            class="distributor-option"
-          >
-            {{ dist.DistributorNames }}
-          </li>
-        </ul>
-        <q-select
-          v-model="form.dpccode"
-          :options="dpcs"
-          option-value="dpccode"
-          option-label="dpcname"
-          label="DPC"
-          dense
-          outlined
-          emit-value
-          map-options
-          class="q-mt-md"
-        />
-        <q-input
-          v-model="form.salesdate"
-          label="Sales Date"
-          type="date"
-          dense
-          outlined
-          class="q-mt-md"
-        />
-
-        <div class="q-mt-md">
-          <div
-            v-for="(item, i) in form.salesdetails"
-            :key="i"
-            class="row q-mb-sm items-start q-gutter-xs"
-          >
-            <!-- Product Select -->
+        <div
+          v-for="(item, index) in form.salesdetails"
+          :key="item.productcode + '_' + index"
+          class="q-mb-sm row q-col-gutter-sm items-center q-gutter-xs"
+        >
+          <!-- Product name / select wraps above on mobile -->
+          <div class="col-12 col-sm-4">
             <q-select
               v-model="item.productcode"
               :options="products"
               option-value="productcode"
               option-label="productname"
-              emit-value
-              map-options
               label="Product"
               dense
               outlined
-              class="col-12 col-sm-5 text-truncate"
-              style="min-width: 0"
-              @update:model-value="updateProductDetails(item)"
+              emit-value
+              map-options
+              @update:model-value="() => selectProduct(item)"
+              :disable="item.isExisting"
             />
+          </div>
 
-            <!-- Qty -->
-            <!-- Qty -->
+          <!-- Other inputs: qty, price, BV + delete button -->
+          <div class="col-12 col-sm row items-center no-wrap q-gutter-sm">
             <q-input
               v-model.number="item.quantity"
               type="number"
               label="Qty"
               dense
               outlined
-              class="col-4 col-sm-2 text-center"
               :disable="item.availableQty === 0"
-              @update:model-value="
-                () => {
-                  validateQuantity(item)
-                  recalcItem(item)
-                }
-              "
+              @update:model-value="() => changeQuantity(item)"
+              class="col"
             />
-
-            <!-- Price -->
             <q-input
               v-model.number="item.unitprice"
               type="number"
@@ -101,10 +73,8 @@
               dense
               outlined
               readonly
-              class="col-4 col-sm-2 text-center"
+              class="col"
             />
-
-            <!-- BV -->
             <q-input
               v-model.number="item.unitbv"
               type="number"
@@ -112,42 +82,29 @@
               dense
               outlined
               readonly
-              class="col-4 col-sm-2 text-center"
+              class="col"
             />
-            <div class="text-caption text-blue q-ml-sm">Available: {{ item.availableQty }}</div>
-
-            <!-- Buttons Row (stacks below on mobile) -->
-            <div class="col-12 flex justify-center q-mt-xs">
-              <q-btn
-                dense
-                flat
-                round
-                color="primary"
-                icon="save"
-                size="sm"
-                class="q-mx-xs"
-                @click="markProductForSave(item)"
-              />
-              <q-btn
-                dense
-                flat
-                round
-                color="negative"
-                icon="delete"
-                size="sm"
-                class="q-mx-xs"
-                @click="removeProduct(i, item)"
-              />
-            </div>
+            <q-btn dense flat color="negative" icon="delete" @click="removeProduct(index, item)" />
           </div>
 
-          <!-- Add New Product -->
-          <q-btn color="green" label="Add Product" flat @click="addProduct" />
+          <!-- Available qty -->
+          <div class="col-12 text-caption">Available: {{ item.availableQty }}</div>
         </div>
       </q-card-section>
+      <q-card-section>
+        <!-- FLOATING ADD ITEM BUTTON -->
+        <q-btn
+          fab
+          color="green"
+          icon="add"
+          class="absolute-bottom-right q-mb-md q-mr-md"
+          @click="addProduct"
+        />
+      </q-card-section>
 
+      <!-- FOOTER ACTIONS -->
       <q-card-actions align="right">
-        <q-spinner-hourglass v-if="loading" color="light-green-14" size="30px" />
+        <q-spinner-hourglass v-if="loading" color="primary" size="30px" />
         <q-btn flat label="Cancel" @click="$router.back()" />
         <q-btn color="primary" label="Save" @click="submitUpdate" />
       </q-card-actions>
@@ -156,21 +113,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSaleStore } from '../stores/storeSales' // adjust path to your file
 import { useQuasar } from 'quasar'
 import { supabase } from 'boot/supabase'
 import DistributorSearch from 'components/DistributorSearch.vue'
-import { useI18n } from 'vue-i18n'
-const { t: $t } = useI18n()
+//import { useAuthStore } from 'stores/auth'
+//const storeAuth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const $q = useQuasar()
-const changedItems = ref([])
-const deletedItems = ref([])
+
 const loading = ref(false)
-const salesStore = useSaleStore()
+const products = ref([])
+const dpcs = ref([])
 
 const form = ref({
   receiptno: '',
@@ -178,408 +134,282 @@ const form = ref({
   distributorname: '',
   dpccode: '',
   salesdate: '',
-  salesdetails: [],
+  salesdetails: [], // productcode, quantity, unitprice, unitbv, availableQty, isExisting
 })
-const products = ref([]) // active product list
-const searchQuery = ref('')
-const distributors = ref([])
-const dpcs = ref([])
 
-// 🧩 Helper to format date into DD-MM-YYYY
-function formatDate(dateString) {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  const day = String(date.getDate()).padStart(2, '0')
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const year = date.getFullYear()
-  return `${day}-${month}-${year}`
-}
+// snapshot of original items (used to compute diffs)
+const originalItems = ref([])
 
-const filteredDistributors = computed(() =>
-  distributors.value.filter((d) =>
-    d.DistributorNames.toLowerCase().includes(searchQuery.value.toLowerCase()),
-  ),
-)
-
-const selectDistributor = (dist) => {
-  form.value.distributoridno = dist.DistributorIDNO
-  searchQuery.value = dist.DistributorNames
-}
-// mark an item for saving (insert or update later)
-const markProductForSave = (item) => {
-  // attach receiptno if new
-  item.receiptno = form.value.receiptno
-
-  // if not already marked, push into changedItems
-  const exists = changedItems.value.find((ci) => ci.productcode === item.productcode)
-  if (!exists) {
-    changedItems.value.push({ ...item })
-  } else {
-    // replace with latest values
-    Object.assign(exists, item)
-  }
-
-  $q.notify({ type: 'info', message: `Marked ${item.productcode} for save` })
-}
-
-const removeProduct = (i, item) => {
-  $q.dialog({
-    title: 'Confirm Removal',
-    message: `Are you sure you want to remove product ${item.productcode}?`,
-    ok: {
-      label: 'Yes, remove',
-      color: 'negative',
-    },
-    cancel: {
-      label: 'Cancel',
-      color: 'grey',
-    },
-    persistent: true,
-  }).onOk(() => {
-    // Mark this product for DB deletion
-    deletedItems.value.push(item)
-
-    // Remove from local list
-    form.value.salesdetails.splice(i, 1)
-
-    // If no items remain, confirm deleting the whole receipt
-    if (form.value.salesdetails.length === 0) {
-      $q.dialog({
-        title: $t('deleteReceipt.title'),
-        message: $t('deleteReceipt.message'),
-        ok: {
-          label: $t('deleteReceipt.ok'),
-          color: 'negative',
-        },
-        cancel: {
-          label: $t('deleteReceipt.cancel'),
-          color: 'grey',
-        },
-        persistent: true,
-      }).onOk(() => {
-        deleteEntireReceipt()
-      })
-    }
-  })
-}
-const deleteEntireReceipt = async () => {
+/* ------------------------- Load Receipt ------------------------- */
+async function fetchReceipt(receiptno) {
   try {
-    const stockTable = `${form.value.dpccode}_STOCK`
-    const currentUser = 'system'
+    // Fetch sales header
+    const { data: header, error: headerErr } = await supabase
+      .from('salesheader')
+      .select('*')
+      .eq('receiptno', receiptno)
+      .maybeSingle()
+    if (headerErr) throw headerErr
 
-    // 🧮 Fetch all products in this receipt first
-    const { data: itemsToRestore, error: fetchError } = await supabase
+    // Fetch sales details
+    const { data: details, error: detailsErr } = await supabase
       .from('salesdetails')
-      .select('productcode, quantity')
-      .eq('receiptno', form.value.receiptno)
+      .select('*')
+      .eq('receiptno', receiptno)
+    if (detailsErr) throw detailsErr
 
-    if (fetchError) throw fetchError
+    // Map details and mark existing products
+    const mappedDetails = (details || []).map((d) => ({
+      productcode: d.productcode,
+      quantity: d.quantity,
+      unitprice: d.unitprice ?? 0,
+      unitbv: d.unitbv ?? 0,
+      availableQty: 0, // will be loaded separately
+      isExisting: true, // existing products are unchangeable
+    }))
 
-    if (itemsToRestore && itemsToRestore.length > 0) {
-      for (const item of itemsToRestore) {
-        const { data: stockData, error: stockErr } = await supabase
-          .from(stockTable)
-          .select('quantity')
-          .eq('productcode', item.productcode)
-          .single()
-
-        if (stockErr) throw stockErr
-
-        const newQty = (stockData?.quantity || 0) + item.quantity
-
-        const { error: updateErr } = await supabase
-          .from(stockTable)
-          .update({
-            quantity: newQty,
-            lastmodified: new Date(),
-            modifiedby: currentUser,
-          })
-          .eq('productcode', item.productcode)
-
-        if (updateErr) throw updateErr
-
-        $q.notify({
-          type: 'positive',
-          message: `Restored ${item.quantity} of ${item.productcode} to stock.`,
-          timeout: 1000,
-        })
-      }
+    // Populate form reactive object
+    // NOTE: for distributorname we prefer header value but fall back to any existing edited value
+    form.value = {
+      receiptno: header?.receiptno || receiptno,
+      distributoridno: header?.distributoridno || form.value.distributoridno || '',
+      distributorname: (header?.distributorname ?? form.value.distributorname) || '',
+      dpccode: header?.dpccode || form.value.dpccode || '',
+      salesdate: header?.salesdate ? header.salesdate.split('T')[0] : form.value.salesdate || '',
+      salesdetails: mappedDetails,
     }
 
-    // 🧹 Now delete details and header
-    await supabase.from('salesdetails').delete().eq('receiptno', form.value.receiptno)
-    await supabase.from('salesheader').delete().eq('receiptno', form.value.receiptno)
+    // Keep a snapshot of original items for diffing
+    originalItems.value = JSON.parse(JSON.stringify(mappedDetails))
 
-    $q.notify({
-      type: 'positive',
-      message: 'Receipt deleted and stock restored successfully.',
-    })
-
-    router.back()
+    // Load available stock for each item concurrently
+    await Promise.all(form.value.salesdetails.map((item) => loadStock(item)))
   } catch (err) {
     console.error(err)
-    $q.notify({
-      type: 'negative',
-      message: err.message || 'Failed to delete and restore stock!',
-    })
+    $q.notify({ type: 'negative', message: err.message || 'Failed to load receipt' })
   }
 }
 
-onMounted(async () => {
-  const { data } = await supabase.from('Distributors').select('DistributorIDNO, DistributorNames')
-  distributors.value = data || []
-  const receiptno = route.params.receiptno
-  if (!receiptno) return
-
-  // Fetch sale by receiptno
-  await salesStore.fetchSaleByReceipt(receiptno)
-  const sale = salesStore.selectedSale
-  if (sale) {
-    form.value = JSON.parse(JSON.stringify(sale)) // clone
-  }
-
-  // Fetch active products
-  const { data: productsData, error: productsError } = await supabase
-    .from('products')
-    .select('productcode, productname, distributorprice, bvs')
-    .eq('status', 'active')
-
-  if (!productsError) products.value = productsData
-
-  // Fetch all DPCs
-  const { data: dpcData, error: dpcError } = await supabase
-    .from('dpc')
-    .select('dpccode, dpcname')
-    .order('dpcname')
-
-  if (!dpcError && dpcData) {
-    dpcs.value = dpcData
-  }
-
-  // Preselect the sale's current DPC (if editing existing sale)
-  if (sale && sale.dpccode) {
-    form.value.dpccode = sale.dpccode
-  }
-  if (sale) {
-    for (const item of form.value.salesdetails) {
-      item.availableQty = 0
-      await loadStockForItem(item)
-    }
-  }
-})
-
-// Add a new blank product line
-const addProduct = () => {
-  form.value.salesdetails.push({
-    productcode: '',
-    unitprice: 0,
-    unitbv: 0,
-    quantity: 1,
-    availableQty: 0, // 👈 new
-  })
-}
-
-watch(
-  () => form.value.dpccode,
-  async (newDpc) => {
-    if (!newDpc) return
-
-    for (const item of form.value.salesdetails) {
-      await loadStockForItem(item)
-    }
-  },
-)
-
-watch(
-  () => form.value.salesdetails.map((i) => i.productcode),
-  async () => {
-    for (const item of form.value.salesdetails) {
-      await loadStockForItem(item)
-    }
-  },
-)
-
-async function loadStockForItem(item) {
+/* ------------------------- Stock utilities ------------------------- */
+async function loadStock(item) {
   if (!form.value.dpccode || !item.productcode) {
     item.availableQty = 0
     return
   }
-
-  const table = `${form.value.dpccode}_STOCK`
-
+  const stockTable = `${form.value.dpccode}_STOCK`
   const { data } = await supabase
-    .from(table)
+    .from(stockTable)
     .select('quantity')
     .eq('productcode', item.productcode)
     .maybeSingle()
-
-  item.availableQty = data ? data.quantity : 0
+  item.availableQty = data?.quantity ?? 0
 }
 
-const validateQuantity = (item) => {
-  // When stock is zero → lock quantity at 0
-  if (item.availableQty === 0) {
-    item.quantity = 0
-    return
-  }
+/* ------------------------- Product selection ------------------------- */
+async function selectProduct(item) {
+  const p = products.value.find((x) => x.productcode === item.productcode)
+  if (!p) return
+  item.unitprice = p.distributorprice ?? 0
+  item.unitbv = p.bvs ?? 0
+  // IMPORTANT: do NOT force-set item.quantity here (avoids double deductions)
+  await loadStock(item)
+}
 
-  // User typed more than in stock → correct it
+/* ------------------------- Quantity changes ------------------------- */
+async function changeQuantity(item) {
+  if (!item.quantity || item.quantity < 1) item.quantity = 1
   if (item.quantity > item.availableQty) {
     item.quantity = item.availableQty
+    $q.notify({ type: 'warning', message: `Only ${item.availableQty} available` })
+  }
+}
+
+/* ------------------------- Add/Remove ------------------------- */
+function addProduct() {
+  form.value.salesdetails.push({
+    productcode: '',
+    quantity: 1, // new rows start with 1
+    unitprice: 0,
+    unitbv: 0,
+    availableQty: 0,
+    isExisting: false, // allow editing the product on new rows
+  })
+}
+
+function removeProduct(index, item) {
+  $q.dialog({
+    title: 'Confirm Removal',
+    message: `Remove ${item.productname || item.productcode || 'this product'}?`,
+    ok: { label: 'Yes', color: 'negative' },
+    cancel: { label: 'Cancel', color: 'grey' },
+    persistent: true,
+  }).onOk(() => {
+    // JUST remove from array (do NOT update stock)
+    form.value.salesdetails.splice(index, 1)
 
     $q.notify({
-      type: 'warning',
-      message: `Only ${item.availableQty} items available in stock`,
+      type: 'positive',
+      message: 'Product removed',
     })
-  }
-
-  // Prevent negative, zero, or null
-  if (!item.quantity || item.quantity < 1) {
-    item.quantity = 1
-  }
+  })
 }
 
-// Remove product row (with confirm + delete in DB)
+/* ------------------------- Compute diffs ------------------------- */
+const getInserts = () =>
+  form.value.salesdetails.filter(
+    (it) => !originalItems.value.some((o) => o.productcode === it.productcode),
+  )
+const getUpdates = () =>
+  form.value.salesdetails.filter((it) => {
+    const o = originalItems.value.find((x) => x.productcode === it.productcode)
+    return o && o.quantity !== it.quantity
+  })
+const getDeletes = () =>
+  originalItems.value.filter(
+    (o) => !form.value.salesdetails.some((it) => it.productcode === o.productcode),
+  )
 
-// Update price + BV when product selected
-const updateProductDetails = async (item) => {
-  const product = products.value.find((p) => p.productcode === item.productcode)
-  if (product) {
-    item.unitprice = product.distributorprice
-    item.unitbv = product.bvs
-    item.quantity = 1
+/* ------------------------- Submit Update ------------------------- */
+async function submitUpdate() {
+  if (!form.value.dpccode) {
+    $q.notify({ type: 'negative', message: 'DPC required!' })
+    return
   }
+  loading.value = true
+  const stockTable = `${form.value.dpccode}_STOCK`
 
-  await loadStockForItem(item) // 👈 NEW
-}
-
-// Recalculate totals when qty changes (optional if you need line totals later)
-const recalcItem = () => {
-  // right now nothing to do, unless BV or price changes dynamically
-}
-
-// 🧾 Reusable logger function — writes to dispatchlogs table
-async function updateLog({ from, to, productcode, quantity, dispatchedby, status }) {
   try {
-    const { error } = await supabase.from('dispatchlogs').insert([
-      {
-        from_location: from,
-        to_location: to,
-        productcode,
-        quantity,
-        dispatchedby,
-        status,
-      },
-    ])
-    if (error) throw error
-  } catch (err) {
-    console.error('Failed to record dispatch log:', err.message)
-    $q.notify({
-      type: 'warning',
-      message: `Log not recorded for ${productcode}`,
-    })
-  }
-}
+    const inserts = getInserts()
+    const updates = getUpdates()
+    const deletes = getDeletes()
 
-const submitUpdate = async () => {
-  try {
-    if (!form.value.dpccode) {
-      $q.notify({ type: 'negative', message: 'DPC code is required!' })
-      return
-    }
-
-    // Validate that there is something to update
-    if (
-      (!changedItems.value || changedItems.value.length === 0) &&
-      (!deletedItems.value || deletedItems.value.length === 0)
-    ) {
-      $q.notify({ type: 'negative', message: 'No changes detected for update.' })
-      return
-    }
-
-    loading.value = true
-    const currentUser = form.value.lastmodifiedby || 'system'
-    const stockTable = `${form.value.dpccode}_STOCK`
-
-    // 1️⃣ Handle deleted items — restore stock
-    for (const item of deletedItems.value || []) {
-      const { data: stockData } = await supabase
+    // 1) Handle deletes: restore stock and remove from salesdetails table
+    for (const oldItem of deletes) {
+      const { data } = await supabase
         .from(stockTable)
         .select('quantity')
-        .eq('productcode', item.productcode)
-        .single()
-
-      const newQty = (stockData?.quantity || 0) + item.quantity
-
+        .eq('productcode', oldItem.productcode)
+        .maybeSingle()
+      const newStock = (data?.quantity ?? 0) + (oldItem.quantity ?? 0)
       await supabase
         .from(stockTable)
+        .update({ quantity: newStock, lastmodified: new Date(), modifiedby: 'system' })
+        .eq('productcode', oldItem.productcode)
+
+      await supabase
+        .from('salesdetails')
+        .delete()
+        .eq('receiptno', form.value.receiptno)
+        .eq('productcode', oldItem.productcode)
+    }
+
+    // If user removed all products -> delete entire receipt (header + details) and exit
+    if (form.value.salesdetails.length === 0) {
+      await supabase.from('salesheader').delete().eq('receiptno', form.value.receiptno)
+      await supabase.from('salesdetails').delete().eq('receiptno', form.value.receiptno)
+      $q.notify({ type: 'positive', message: 'All products removed — receipt deleted.' })
+      router.back()
+      return
+    }
+
+    // 2) Handle updates: adjust stock by the difference and update salesdetails rows
+    for (const newItem of updates) {
+      const original = originalItems.value.find((o) => o.productcode === newItem.productcode)
+      const diff = (original?.quantity ?? 0) - newItem.quantity
+      const { data } = await supabase
+        .from(stockTable)
+        .select('quantity')
+        .eq('productcode', newItem.productcode)
+        .maybeSingle()
+      const updatedStock = (data?.quantity ?? 0) + diff
+      await supabase
+        .from(stockTable)
+        .update({ quantity: updatedStock, lastmodified: new Date(), modifiedby: 'system' })
+        .eq('productcode', newItem.productcode)
+
+      await supabase
+        .from('salesdetails')
         .update({
-          quantity: newQty,
-          lastmodified: new Date(),
-          modifiedby: currentUser,
+          quantity: newItem.quantity,
+          unitprice: newItem.unitprice,
+          unitbv: newItem.unitbv,
         })
-        .eq('productcode', item.productcode)
-
-      await updateLog({
-        from: 'SALES',
-        to: form.value.dpccode,
-        productcode: item.productcode,
-        quantity: item.quantity,
-        dispatchedby: currentUser,
-        status: 'Deleted item — stock restored',
-      })
+        .eq('receiptno', form.value.receiptno)
+        .eq('productcode', newItem.productcode)
     }
 
-    // 2️⃣ Build payload for added/updated items
-    const payload = {
-      receiptno: form.value.receiptno,
-      distributoridno: form.value.distributoridno,
-      dpccode: form.value.dpccode,
-      salesdate: form.value.salesdate,
-      lastmodifiedby: currentUser,
-      items: (changedItems.value || []).map((item) => ({
-        productcode: item.productcode,
-        quantity: item.quantity,
-        unitprice: item.unitprice,
-        unitbv: item.unitbv,
-      })),
-    }
+    // 3) Handle inserts: deduct stock and insert new salesdetails rows
+    if (inserts.length) {
+      const payload = []
+      for (const i of inserts) {
+        const { data } = await supabase
+          .from(stockTable)
+          .select('quantity')
+          .eq('productcode', i.productcode)
+          .maybeSingle()
+        const newStock = (data?.quantity ?? 0) - (i.quantity ?? 0)
+        await supabase
+          .from(stockTable)
+          .update({ quantity: newStock, lastmodified: new Date(), modifiedby: 'system' })
+          .eq('productcode', i.productcode)
 
-    // 3️⃣ Call RPC to update sales + stock for added/changed items
-    if (payload.items.length > 0) {
-      const { error } = await supabase.rpc('update_sales_transaction', { payload })
-      if (error) throw error
-
-      // Log each updated/added item
-      for (const item of payload.items) {
-        await updateLog({
-          from: 'SALES',
-          to: payload.dpccode,
-          productcode: item.productcode,
-          quantity: item.quantity,
-          dispatchedby: currentUser,
-          status: 'Updated/Added item — stock adjusted',
+        payload.push({
+          receiptno: form.value.receiptno,
+          productcode: i.productcode,
+          quantity: i.quantity,
+          unitprice: i.unitprice,
+          unitbv: i.unitbv,
         })
       }
+      await supabase.from('salesdetails').insert(payload)
     }
 
-    // 4️⃣ Log header update
-    await updateLog({
-      from: 'SALES',
-      to: payload.dpccode,
-      productcode: 'HEADER',
-      quantity: 0,
-      dispatchedby: currentUser,
-      status: `Updated receipt info for ${payload.receiptno}`,
-    })
+    // 4) Always update salesheader (allows editing name/salesdate even if products unchanged)
+    // Update salesheader
+    await supabase
+      .from('salesheader')
+      .update({
+        distributoridno: form.value.distributoridno, // EDITABLE
+        dpccode: form.value.dpccode,
+        salesdate: form.value.salesdate, // EDITABLE
+        lastmodified: new Date(),
+        lastmodifiedby: 'system',
+      })
+      .eq('receiptno', form.value.receiptno)
 
-    $q.notify({ type: 'positive', message: 'Sale and stock updated successfully!' })
+    $q.notify({ type: 'positive', message: 'Receipt and stock updated!' })
+
+    // Refresh the receipt to get the latest state (but keep any edited distributorname if missing)
+    await fetchReceipt(form.value.receiptno)
     router.back()
   } catch (err) {
-    console.error('Update failed:', err)
+    console.error(err)
     $q.notify({ type: 'negative', message: err.message || 'Update failed!' })
   } finally {
     loading.value = false
   }
 }
+
+/* ------------------------- Lifecycle ------------------------- */
+onMounted(async () => {
+  const { data: d } = await supabase.from('dpc').select('dpccode, dpcname').order('dpcname')
+  dpcs.value = d || []
+
+  const { data: p } = await supabase
+    .from('products')
+    .select('productcode, productname, distributorprice, bvs')
+    .eq('status', 'active')
+  products.value = p || []
+
+  const receiptno = route.params.receiptno
+  if (receiptno) await fetchReceipt(receiptno)
+})
+
+watch(
+  () => form.value.dpccode,
+  async () => {
+    // reload stock after DPC change
+    await Promise.all(form.value.salesdetails.map((it) => loadStock(it)))
+  },
+)
 </script>

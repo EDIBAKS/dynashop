@@ -113,7 +113,7 @@ const messages = {
     mystock: 'current Stock',
     submitSaleTitle: 'Submit Sale',
     submitSaleConfirm: 'Are you sure you want to submit this sale?',
-
+    select_report_type: 'Select Report Category',
     submitError: 'Error submitting sale: {error}',
   },
 
@@ -226,6 +226,7 @@ const messages = {
     mystock: 'Stock Actuel',
     submitSaleTitle: 'Soumettre la vente',
     submitSaleConfirm: 'Êtes-vous sûr de vouloir soumettre cette vente ?',
+    select_report_type: 'Catégorie de rapport',
   },
 }
 
