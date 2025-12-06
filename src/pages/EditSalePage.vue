@@ -4,6 +4,14 @@
       <!-- HEADER -->
       <q-card-section>
         <div class="text-h6">Edit Sale</div>
+        <div>
+          ReceiptNo:
+          <span class="text-light-green-14 text-bold">{{ form.receiptno || 'unknown' }}</span>
+        </div>
+        <div>
+          From:<span class="text-light-green-14 text-bold">{{ form.dpccode || 'unknown' }}</span>
+        </div>
+
         <div class="q-mt-sm">
           <q-input v-model="form.distributoridno" label="Distributor ID" dense outlined />
         </div>

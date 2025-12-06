@@ -17,7 +17,7 @@
       dense
       outlined
       class="white-input text-semi-bold text-center text-uppercase"
-      input-class="text-white text-bold text-center text-uppercase"
+      input-class="text-black text-bold text-center text-uppercase"
       label="Type Distributor Name..."
       label-color="white"
     />
