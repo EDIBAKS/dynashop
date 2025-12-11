@@ -7,7 +7,7 @@ export const useAuth = defineStore('auth', {
     user: null, // Supabase auth user
     userDetails: null, // Additional user details from `shopusers` table
     inactivityTimer: null, // Timer reference
-    inactivityLimit: 6 * 60 * 1000, // 3 minutes (in milliseconds)
+    inactivityLimit: 10 * 60 * 1000, // 10 minutes (in milliseconds)
   }),
 
   actions: {

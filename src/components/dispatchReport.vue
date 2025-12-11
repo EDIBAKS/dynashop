@@ -77,16 +77,39 @@
         </div>
       </div>
 
-      <!-- FETCH BUTTON -->
-      <div class="row justify-end q-mt-sm">
+      <div class="row justify-end q-mt-sm q-gutter-sm">
         <q-btn color="primary" label="Fetch Dispatches" @click="fetchDispatches" />
+        <q-btn
+          dense
+          flat
+          icon="table_view"
+          color="green"
+          @click="exportToExcel"
+          title="Export to Excel"
+        />
+        <q-btn
+          dense
+          flat
+          icon="picture_as_pdf"
+          color="red"
+          @click="exportToPDF"
+          title="Export to PDF"
+        />
       </div>
+
+      <!-- FETCH BUTTON -->
+
       <!-- DISPATCH HEADER -->
-      <div
-        v-if="groupedDispatches.length"
-        class="text-h6 text-center q-mt-lg q-mb-sm text-bold text-primary"
-      >
-        Dispatch: {{ groupedDispatches[0].fromName }} → {{ groupedDispatches[0].toName }}
+      <div v-if="groupedDispatches.length" class="text-center q-mt-lg q-mb-sm">
+        <div class="text-h6 text-bold text-primary">
+          Dispatch: {{ groupedDispatches[0].fromName }} → {{ groupedDispatches[0].toName }}
+        </div>
+
+        <!-- From/To Dates -->
+        <div class="text-subtitle2 text-grey-7 q-mt-xs">
+          From: <span class="text-bold">{{ startDate }}</span> &nbsp; | &nbsp; To:
+          <span class="text-bold">{{ endDate }}</span>
+        </div>
       </div>
 
       <!-- TABLE -->
@@ -111,6 +134,10 @@ import { useAuth } from 'stores/auth'
 import { useQuasar } from 'quasar'
 const auth = useAuth()
 const $q = useQuasar()
+import * as XLSX from 'xlsx'
+//import { saveAs } from 'file-saver'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable' // ✅ default import
 
 //const auth = useAuth()
 // STATE
@@ -361,4 +388,93 @@ const groupedDispatches = computed(() => {
     totalValue: g.quantity * g.distributorprice,
   }))
 })
+
+function exportToExcel() {
+  if (!groupedDispatches.value.length) return
+
+  const ws = XLSX.utils.json_to_sheet(
+    groupedDispatches.value.map((row) => ({
+      'Dispatch Date': row.date,
+      'Product Code': row.productcode,
+      'Product Name': row.productname,
+      Quantity: row.quantity,
+      Value: row.distributorprice * row.quantity,
+      'Dispatched By': row.dispatchedby,
+    })),
+  )
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Dispatch Report')
+
+  const header = [
+    [`From: ${groupedDispatches.value[0].fromName} → To: ${groupedDispatches.value[0].toName}`],
+    [`Start Date: ${startDate.value} | End Date: ${endDate.value}`],
+    [`Printed On: ${new Date().toLocaleString()}`],
+    [], // empty row before table
+  ]
+
+  XLSX.utils.sheet_add_aoa(ws, header, { origin: 'A1' })
+
+  // Footer after data
+  const footerRow = groupedDispatches.value.length + header.length + 2
+  XLSX.utils.sheet_add_aoa(
+    ws,
+    [
+      ['Dispatched By:', '', '', 'Signature:'],
+      ['Received By:', '', '', 'Signature:'],
+    ],
+    { origin: `A${footerRow}` },
+  )
+
+  XLSX.writeFile(wb, 'DispatchReport.xlsx')
+}
+
+function exportToPDF() {
+  const doc = new jsPDF()
+  const tableColumns = [
+    'Dispatch Date',
+    'Product Code',
+    'Product Name',
+    'DP',
+    'Qty',
+    'Value',
+    'Dispatched By',
+  ]
+
+  const tableRows = groupedDispatches.value.map((row) => [
+    row.date,
+    row.productcode,
+    row.productname,
+    row.distributorprice,
+    row.quantity,
+    row.distributorprice * row.quantity,
+    row.dispatchedby,
+  ])
+
+  // Header
+  const startY = 20
+  doc.setFontSize(12)
+  doc.setTextColor(0, 0, 0) // black
+  doc.text(
+    `From: ${groupedDispatches.value[0].fromName} → To: ${groupedDispatches.value[0].toName}`,
+    14,
+    startY,
+  )
+  doc.text(`Start Date: ${startDate.value} | End Date: ${endDate.value}`, 14, startY + 6)
+  doc.text(`Printed On: ${new Date().toLocaleString()}`, 14, startY + 12)
+
+  autoTable(doc, {
+    head: [tableColumns],
+    body: tableRows,
+    startY: startY + 20,
+    theme: 'grid',
+  })
+
+  // Footer
+  const finalY = doc.lastAutoTable.finalY + 10
+  doc.text('Dispatched By: ______________________', 14, finalY)
+  doc.text('Received By: ______________________', 14, finalY + 10)
+
+  doc.save('DispatchReport.pdf')
+}
 </script>
