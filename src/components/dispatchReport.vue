@@ -81,13 +81,20 @@
       <div class="row justify-end q-mt-sm">
         <q-btn color="primary" label="Fetch Dispatches" @click="fetchDispatches" />
       </div>
+      <!-- DISPATCH HEADER -->
+      <div
+        v-if="groupedDispatches.length"
+        class="text-h6 text-center q-mt-lg q-mb-sm text-bold text-primary"
+      >
+        Dispatch: {{ groupedDispatches[0].fromName }} → {{ groupedDispatches[0].toName }}
+      </div>
 
       <!-- TABLE -->
       <q-table
-        v-if="dispatches.length"
-        :rows="mappedDispatches"
+        v-if="groupedDispatches.length"
+        :rows="groupedDispatches"
         :columns="columns"
-        row-key="id"
+        row-key="productcode"
         flat
         dense
         class="q-mt-md"
@@ -107,7 +114,7 @@ const $q = useQuasar()
 
 //const auth = useAuth()
 // STATE
-const dispatchType = ref('P2P') // P2P: Province → Province, P2S: Province → Shop
+const dispatchType = ref('P2S') // P2P: Province → Province, P2S: Province → Shop
 const fromOptions = ref([])
 const toOptions = ref([])
 const fromValue = ref(null)
@@ -118,8 +125,8 @@ const productsMap = ref({}) // { productcode: { productname, distributorprice } 
 const dispatchTypes = computed(() => {
   return isAdminOrSuperAdmin.value
     ? [
-        { label: 'Province → Province', value: 'P2P' },
         { label: 'Province → Shop', value: 'P2S' },
+        { label: 'Province → Province', value: 'P2P' },
       ]
     : [
         { label: 'Shop Dispatches', value: 'SHOP' }, // just for display
@@ -131,37 +138,54 @@ const isAdmin = computed(() => auth.userDetails?.role === 'Admin')
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
 const isAdminOrSuperAdmin = computed(() => isAdmin.value || isSuperAdmin.value)
 
-function formatDate(dateString) {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0') // Months are 0-based
-  const yyyy = date.getFullYear()
-
-  const hh = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-
-  return `${dd}-${mm}-${yyyy}:${hh}-${min}`
-}
-
 // --- DATA ---
 const dispatches = ref([])
 const columns = [
-  { name: 'fromName', label: 'From', field: 'fromName', align: 'left' },
-  { name: 'toName', label: 'To', field: 'toName', align: 'left' },
-  { name: 'productcode', label: 'Product Code', field: 'productcode', align: 'left' },
-  { name: 'productname', label: 'Product Name', field: 'productname', align: 'left' },
+  {
+    name: 'date',
+    label: 'Dispatch Date',
+    field: 'date',
+    align: 'left',
+    format: (val) => (val ? val.split('T')[0] : ''), // show only date
+  },
+  {
+    name: 'productcode',
+    label: 'Product Code',
+    field: 'productcode',
+    align: 'left',
+  },
+  {
+    name: 'productname',
+    label: 'Product Name',
+    field: 'productname',
+    align: 'left',
+  },
   {
     name: 'distributorprice',
-    label: 'Distributor Price',
+    label: 'DP',
     field: 'distributorprice',
     align: 'right',
+    format: (v) => Number(v).toLocaleString(),
   },
-  { name: 'quantity', label: 'Quantity', field: 'quantity', align: 'right' },
-  { name: 'totalValue', label: 'Total Value', field: 'totalValue', align: 'right' },
-  { name: 'dispatchedon', label: 'Dispatched On', field: 'dispatchedon', align: 'left' },
-  { name: 'dispatchedby', label: 'Dispatched By', field: 'dispatchedby', align: 'left' },
+  {
+    name: 'quantity',
+    label: 'Qty',
+    field: 'quantity',
+    align: 'right',
+  },
+  {
+    name: 'totalValue',
+    label: 'Value',
+    field: (row) => row.distributorprice * row.quantity, // compute Value = DP * Qty
+    align: 'right',
+    format: (v) => Number(v).toLocaleString(),
+  },
+  {
+    name: 'dispatchedby',
+    label: 'Dispatched By',
+    field: 'dispatchedby',
+    align: 'left',
+  },
 ]
 
 async function fetchProvinces() {
@@ -216,37 +240,6 @@ async function fetchProducts() {
     return acc
   }, {})
 }
-
-const mappedDispatches = computed(() => {
-  return dispatches.value.map((d) => {
-    // Get "From Name"
-    let fromName =
-      fromOptions.value.find((p) => p.value === d.from_location)?.label || d.from_location
-
-    // Get "To Name"
-    let toName = toOptions.value.find((p) => p.value === d.to_location)?.label || d.to_location
-
-    // Get product info
-    const product = productsMap.value[d.productcode] || {}
-    const productname = product.productname || d.productcode
-    const distributorprice = product.distributorprice || 0
-
-    // Total value
-    const totalValue = distributorprice * d.quantity
-
-    return {
-      ...d,
-      fromName,
-      toName,
-      productname,
-      distributorprice,
-      totalValue,
-
-      dispatchedon: formatDate(d.datecreated),
-      dispatchedby: d.createdby,
-    }
-  })
-})
 
 watch(
   () => fromValue.value,
@@ -325,4 +318,47 @@ async function fetchDispatches() {
     $q.notify({ type: 'negative', message: err.message })
   }
 }
+
+const groupedDispatches = computed(() => {
+  const groups = {}
+
+  dispatches.value.forEach((d) => {
+    const dateKey = d.datecreated.split('T')[0]
+
+    const key = `${d.productcode}_${dateKey}`
+
+    if (!groups[key]) {
+      const fromName =
+        fromOptions.value.find((p) => p.value === d.from_location)?.label || d.from_location
+
+      const toName = toOptions.value.find((p) => p.value === d.to_location)?.label || d.to_location
+
+      const product = productsMap.value[d.productcode] || {}
+
+      groups[key] = {
+        date: dateKey,
+        productcode: d.productcode,
+        productname: product.productname || d.productcode,
+
+        // ⭐ ALWAYS convert to number to avoid NaN
+        distributorprice: Number(product.distributorprice) || 0,
+
+        quantity: 0,
+
+        fromName,
+        toName,
+
+        dispatchedby: d.createdby,
+      }
+    }
+
+    // ⭐ Convert quantity to number too
+    groups[key].quantity += Number(d.quantity) || 0
+  })
+
+  return Object.values(groups).map((g) => ({
+    ...g,
+    totalValue: g.quantity * g.distributorprice,
+  }))
+})
 </script>

@@ -137,12 +137,13 @@
         outlined
       />
 
-      <!-- Submit -->
       <q-btn
         type="submit"
         label="Submit"
         color="primary"
+        :loading="loading"
         :disable="
+          loading /* ⛔ prevent double submit */ ||
           !fromValue ||
           (!['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType) && !toValue) ||
           !selectedProduct ||
@@ -151,6 +152,9 @@
         "
         class="full-width"
       />
+      <div v-if="loading" class="q-mt-md flex flex-center">
+        <q-spinner-hourglass color="light-green" size="50px" />
+      </div>
     </q-form>
     <!-- ===================== PRODUCT ADDITION FORM ===================== -->
     <q-separator spaced />
@@ -259,6 +263,7 @@ const dispatchType = ref(isAdmin.value || isSuperAdmin.value ? 'SHOPS' : 'PROMOS
 const availableStock = ref(0)
 // Reactive reference for stock
 const provinceStock = ref(0)
+const loading = ref(false)
 // ✅ Reactive form object
 
 // For non-admin users
@@ -741,10 +746,10 @@ function getValue(obj, key) {
 function getModifiedBy() {
   return auth.userDetails?.firstname || 'system'
 }
-// =======================================================
-// 🟦 1️⃣ SHOPS DISPATCH: DPC → Shop
-// =======================================================
 async function handleShopDispatch() {
+  if (loading.value) return // ⛔ Prevent double execution
+
+  loading.value = true
   try {
     const province = getValue(fromValue.value, 'province_code')
     const shop = getValue(toValue.value, 'shopcode')
@@ -755,6 +760,7 @@ async function handleShopDispatch() {
     if (!province || !shop || !product) {
       throw new Error('Please select Province, Shop, and Product.')
     }
+
     if (isNaN(qty) || qty <= 0) {
       throw new Error('Invalid quantity.')
     }
@@ -773,18 +779,14 @@ async function handleShopDispatch() {
     if (error) throw new Error(error.message)
 
     // ------------------------------------------
-    // 2️⃣ INSERT INTO dispatches LOG TABLE
+    // 2️⃣ INSERT LOG (Safe & Single Execution)
     // ------------------------------------------
-
     const { error: logError } = await supabase.from('dispatches').insert({
       from_location: province,
       to_location: shop,
       productcode: product,
       quantity: qty,
-      createdby: getModifiedBy(), // or auth.user.id / username
-      // dispatch_type: 'P2S',           // only if you added this field
-      // creator_dpc: auth.userDetails.dpc_id,
-      // remarks: 'Transfer from province to shop',
+      createdby: getModifiedBy(),
     })
 
     if (logError) throw new Error(logError.message)
@@ -799,6 +801,8 @@ async function handleShopDispatch() {
   } catch (err) {
     console.error('❌ Dispatch Error:', err.message)
     $q.notify({ type: 'negative', message: err.message })
+  } finally {
+    loading.value = false // 🔄 Always release lock
   }
 }
 
