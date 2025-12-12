@@ -69,7 +69,7 @@
     </q-header>
 
     <!-- Page Content -->
-    <q-page-container :style="wallpaperStyle" class="q-pa-sm">
+    <q-page-container :style="wallpaperStyle">
       <router-view />
 
       <!-- Floating Buttons (INSIDE page, just below header, left corner) -->
@@ -77,11 +77,19 @@
       <!-- Floating Buttons (INSIDE page, just below header, right corner) -->
       <div
         class="row items-center no-wrap"
-        style="position: absolute; top: 120px; right: 40px; z-index: 1000; gap: 8px"
+        style="position: fixed; top: 120px; right: 40px; z-index: 1000; gap: 8px"
       >
         <!-- Language Toggle with Label -->
         <div class="relative-position">
-          <q-btn dense round flat color="white" size="lg" icon="language" @click="toggleLanguage" />
+          <q-btn
+            dense
+            round
+            flat
+            color="light-green-14"
+            size="lg"
+            icon="language"
+            @click="toggleLanguage"
+          />
 
           <!-- Small label positioned above button -->
           <div
@@ -104,8 +112,8 @@
           v-model="fabOpen"
           icon="menu"
           active-icon="close"
-          color="white"
-          text-color="blue-grey-10"
+          color="light-green-14"
+          text-color="white"
           direction="down"
           size="30px"
         >

@@ -93,6 +93,31 @@
             label-color="white"
           />
         </div>
+        <div class="row items-center q-col-gutter-sm q-mt-md" style="width: 100%">
+          <div class="col">
+            <q-input
+              v-if="form.reportType === 'dailySales'"
+              v-model="fromReceipt"
+              label="From Receipt No"
+              input-class="text-center text-white text-bold"
+              outlined
+              dense
+              @update:model-value="(val) => (fromReceipt = val.toUpperCase())"
+            />
+          </div>
+
+          <div class="col">
+            <q-input
+              v-if="form.reportType === 'dailySales'"
+              v-model="toReceipt"
+              label="To Receipt No"
+              input-class="text-center text-white text-bold"
+              outlined
+              dense
+              @update:model-value="(val) => (toReceipt = val.toUpperCase())"
+            />
+          </div>
+        </div>
       </q-card-section>
 
       <q-card-section class="custom-form">
@@ -226,16 +251,41 @@
                 <q-card flat bordered>
                   <!-- Section 1: Receipt & Date -->
                   <q-card-section class="row justify-between items-center">
-                    <div class="text-subtitle2 text-bold text-green-14">
-                      <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
+                    <div class="column">
+                      <div class="text-h6 text-weight-medium text-green-14">
+                        <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
+                      </div>
+                      <div>
+                        <q-chip
+                          dense
+                          size="md"
+                          icon="sell"
+                          text-color="white"
+                          text-center
+                          :color="statusColor(sale.status)"
+                          >{{ sale.status }}</q-chip
+                        >
+                        <q-chip
+                          dense
+                          size="md"
+                          icon="person"
+                          text-color="white"
+                          text-center
+                          :color="statusColor(sale.status)"
+                          >{{ sale.createdby || 'Unknown' }}</q-chip
+                        >
+                      </div>
                     </div>
-                    <div class="text-subtitle2">
-                      <b>SaleDate:</b> {{ formatDateTime(sale.salesdate) }}
-                    </div>
-                  </q-card-section>
 
-                  <!-- Section 2: Distributor info & status -->
-                  <q-card-section class="row justify-between items-center q-pt-xs q-pb-xs">
+                    <div class="column">
+                      <div class="text-subtitle2">
+                        <b>SaleDate:</b> {{ formatDateTime(sale.salesdate) }}
+                      </div>
+
+                      <div class="text-orange-14">
+                        {{ $t('lastmodified') }}: {{ formatDateTime(sale.lastmodified) }}
+                      </div>
+                    </div>
                     <div class="column">
                       <div>
                         <b>{{ $t('distributorID') }}:</b> {{ sale.distributoridno }}
@@ -243,36 +293,8 @@
                       <div class="text-red-9 text-bold">
                         <b>Name:</b> {{ sale.distributorname || 'Fetching...' }}
                       </div>
-                      <div class="text-orange-14">
-                        {{ $t('lastmodified') }}:{{ formatDateTime(sale.lastmodified) }}
-                      </div>
-                    </div>
-                    <div>
-                      <q-chip :color="statusColor(sale.status)" text-color="white" class="q-mb-xs">
-                        {{ sale.status }}
-                      </q-chip>
-                      By:<q-chip
-                        :color="statusColor(sale.status)"
-                        text-color="white"
-                        class="q-mb-xs"
-                      >
-                        {{ sale.createdby || 'Unknown' }}
-                      </q-chip>
-                      <div
-                        :style="{
-                          backgroundColor: statusColor(sale.status),
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
-                          display: 'inline-block',
-                          marginBottom: '4px',
-                        }"
-                      >
-                        {{ sale.createdby || 'Unknown' }}
-                      </div>
                     </div>
                   </q-card-section>
-
                   <q-separator />
 
                   <!-- Section 3: Products -->
@@ -426,58 +448,48 @@
               <!-- Paginated receipts for this distributor -->
               <div v-for="sale in group.sales" :key="sale.receiptno" class="q-mt-sm">
                 <q-card flat bordered>
-                  <q-card-section class="q-pa-sm">
-                    <div class="row q-col-gutter-sm">
-                      <!-- Column 1: Distributor Info -->
-                      <div class="col-12 col-sm-6 col-lg-4">
-                        <!-- Distributor ID & DPC -->
-                        <div class="text-caption">
-                          <b class="text-orange">{{ $t('DistributorId') }}:</b>
-                          {{ group.distributoridno }}
-                        </div>
-                        <div class="text-caption">
-                          <b>DPC:</b> {{ group.registereddpc || 'Fetching...' }}
-                        </div>
-                        <!-- Distributor Name -->
-                        <div class="text-caption q-mt-xs">
-                          <b>{{ $t('DistributorName') }}:</b>
-                          <span class="text-bold text-ellipsis">
-                            {{ group.distributorname || 'Fetching...' }}
-                          </span>
-                        </div>
+                  <q-card-section class="row justify-between items-center">
+                    <div class="column">
+                      <div class="text-h6 text-weight-medium text-green-14">
+                        <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
+                      </div>
+                      <div>
+                        <q-chip
+                          dense
+                          size="md"
+                          icon="sell"
+                          text-color="white"
+                          text-center
+                          :color="statusColor(sale.status)"
+                          >{{ sale.status }}</q-chip
+                        >
+                        <q-chip
+                          dense
+                          size="md"
+                          icon="person"
+                          text-color="white"
+                          text-center
+                          :color="statusColor(sale.status)"
+                          >{{ sale.createdby || 'Unknown' }}</q-chip
+                        >
+                      </div>
+                    </div>
+
+                    <div class="column">
+                      <div class="text-subtitle2">
+                        <b>SaleDate:</b> {{ formatDateTime(sale.salesdate) }}
                       </div>
 
-                      <!-- Column 2: Receipt & Date -->
-                      <div class="col-12 col-sm-6 col-lg-4">
-                        <div class="text-subtitle2 text-bold text-green-14">
-                          <b>{{ $t('receiptNo') }}:</b> {{ sale.receiptno }}
-                        </div>
-                        <div class="text-caption q-mt-xs">
-                          <b>Date:</b> {{ formatDateTime(sale.salesdate) }}
-                        </div>
+                      <div class="text-orange-14">
+                        {{ $t('lastmodified') }}: {{ formatDateTime(sale.lastmodified) }}
                       </div>
-
-                      <!-- Column 3: Rank & Status -->
-                      <div class="col-12 col-sm-6 col-lg-4">
-                        <div class="text-caption">
-                          <b>Rank:</b> {{ group.distributorposition || 'Fetching...' }}
-                        </div>
-                        <div class="q-mt-sm">
-                          <q-chip
-                            :color="statusColor(sale.status)"
-                            text-color="white"
-                            class="text-caption"
-                          >
-                            {{ sale.status }}
-                          </q-chip>
-                          By:<q-chip
-                            :color="statusColor(sale.status)"
-                            text-color="white"
-                            class="q-mb-xs"
-                          >
-                            {{ sale.createdby || 'Unknown' }}
-                          </q-chip>
-                        </div>
+                    </div>
+                    <div class="column">
+                      <div>
+                        <b>{{ $t('distributorID') }}:</b> {{ sale.distributoridno }}
+                      </div>
+                      <div class="text-red-9 text-bold">
+                        <b>Name:</b> {{ sale.distributorname || 'Fetching...' }}
                       </div>
                     </div>
                   </q-card-section>
@@ -1199,6 +1211,9 @@ const dpcOptions = ref([])
 const editDialog = ref(false)
 const editForm = ref({})
 const tallyType = ref('daily') // default daily
+
+const fromReceipt = ref('')
+const toReceipt = ref('')
 
 const getFirstDayOfMonth = () => {
   const now = new Date()
@@ -2071,11 +2086,28 @@ const currentPage = ref(1)
 const pageOptions = [5, 10, 20, 50, 'All']
 
 // Sort sales by receiptno
+//const sortedSales = computed(() => {
+// return [...salesStore.sales].sort((a, b) => {
+// if receiptno is numeric
+//  return Number(a.receiptno.replace(/\D/g, '')) - Number(b.receiptno.replace(/\D/g, ''))
+// })
+//})
 const sortedSales = computed(() => {
-  return [...salesStore.sales].sort((a, b) => {
-    // if receiptno is numeric
-    return Number(a.receiptno.replace(/\D/g, '')) - Number(b.receiptno.replace(/\D/g, ''))
-  })
+  return [...salesStore.sales]
+    .filter((sale) => {
+      // Convert receiptno to numeric for comparison
+      const saleNo = Number(sale.receiptno.replace(/\D/g, ''))
+
+      const fromNo = fromReceipt.value ? Number(fromReceipt.value.replace(/\D/g, '')) : null
+      const toNo = toReceipt.value ? Number(toReceipt.value.replace(/\D/g, '')) : null
+
+      if (fromNo !== null && saleNo < fromNo) return false
+      if (toNo !== null && saleNo > toNo) return false
+      return true
+    })
+    .sort((a, b) => {
+      return Number(a.receiptno.replace(/\D/g, '')) - Number(b.receiptno.replace(/\D/g, ''))
+    })
 })
 
 // Apply pagination

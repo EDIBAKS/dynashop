@@ -441,11 +441,13 @@ async function fetchProvinceStock() {
 // 🟦 Watch for changes to trigger stock lookup
 // =======================================================
 watch([dispatchType, fromValue, toValue, selectedProduct], () => {
-  fetchStockQuantity()
-})
+  // Prevent crash when product is not yet selected
+  if (!selectedProduct.value || typeof selectedProduct.value !== 'object') {
+    availableStock.value = 0
+    return
+  }
 
-watch(selectedProduct, async (newVal) => {
-  if (newVal) await fetchStockQuantity()
+  fetchStockQuantity()
 })
 
 // Automatically set the correct default
@@ -747,9 +749,9 @@ function getModifiedBy() {
   return auth.userDetails?.firstname || 'system'
 }
 async function handleShopDispatch() {
-  if (loading.value) return // ⛔ Prevent double execution
-
+  if (loading.value) return
   loading.value = true
+
   try {
     const province = getValue(fromValue.value, 'province_code')
     const shop = getValue(toValue.value, 'shopcode')
@@ -757,18 +759,7 @@ async function handleShopDispatch() {
     const productname = getValue(selectedProduct.value, 'productname')
     const qty = Number(dispatchQty.value)
 
-    if (!province || !shop || !product) {
-      throw new Error('Please select Province, Shop, and Product.')
-    }
-
-    if (isNaN(qty) || qty <= 0) {
-      throw new Error('Invalid quantity.')
-    }
-
-    // ------------------------------------------
-    // 1️⃣ RUN STOCK TRANSFER RPC
-    // ------------------------------------------
-    const { error } = await supabase.rpc('transfer_stock_to_shop', {
+    const { error } = await supabase.rpc('transfer_stock', {
       p_province: province,
       p_shopcode: shop,
       p_productcode: product,
@@ -776,318 +767,228 @@ async function handleShopDispatch() {
       p_quantity: qty,
       p_modifiedby: getModifiedBy(),
     })
-    if (error) throw new Error(error.message)
 
-    // ------------------------------------------
-    // 2️⃣ INSERT LOG (Safe & Single Execution)
-    // ------------------------------------------
-    const { error: logError } = await supabase.from('dispatches').insert({
-      from_location: province,
-      to_location: shop,
-      productcode: product,
-      quantity: qty,
-      createdby: getModifiedBy(),
-    })
+    if (error) throw error
 
-    if (logError) throw new Error(logError.message)
-
-    // ------------------------------------------
-    // 3️⃣ UI SUCCESS MESSAGE
-    // ------------------------------------------
+    // 🟢 SUCCESS MESSAGE
     $q.notify({
       type: 'positive',
-      message: `✅ ${qty} moved from ${province} → ${shop}`,
+      position: 'top',
+      message: `✅ ${qty} × ${productname} successfully dispatched from ${province} → ${shop}`,
+      timeout: 3500,
+      actions: [{ icon: 'close', color: 'white' }],
     })
   } catch (err) {
-    console.error('❌ Dispatch Error:', err.message)
-    $q.notify({ type: 'negative', message: err.message })
+    $q.notify({
+      type: 'negative',
+      message: err.message,
+    })
   } finally {
-    loading.value = false // 🔄 Always release lock
+    loading.value = false
   }
 }
 
-// =======================================================
-// 🟦 2️⃣ DPC DISPATCH: Province → Province
-// =======================================================
 async function handleDPCDispatch() {
-  const fromProvince = getValue(fromValue.value, 'province_code')
-  const toProvince = getValue(toValue.value, 'province_code')
-  const product = getValue(selectedProduct.value, 'productcode')
+  if (loading.value) return
+  loading.value = true
 
-  if (!fromProvince || !toProvince || !product)
-    throw new Error('Please select both source and destination provinces and a product.')
+  try {
+    const fromStore = getValue(fromValue.value, 'province_code') // source store table
+    const toStore = getValue(toValue.value, 'province_code') // destination store table
+    const productCode = getValue(selectedProduct.value, 'productcode')
+    const qty = Number(dispatchQty.value)
 
-  if (fromProvince === toProvince)
-    throw new Error('Source and destination provinces cannot be the same.')
+    if (!fromStore || !toStore || !productCode) {
+      throw new Error('Please select source and destination stores and a product.')
+    }
+    if (fromStore === toStore) {
+      throw new Error('Source and destination stores cannot be the same.')
+    }
+    if (isNaN(qty) || qty <= 0) {
+      throw new Error('Invalid quantity.')
+    }
 
-  const qty = Number(dispatchQty.value)
-  if (isNaN(qty) || qty <= 0) throw new Error('Invalid quantity.')
-
-  const { data: sourceStock, error: fetchError } = await supabase
-    .from(fromProvince)
-    .select('quantity')
-    .eq('productcode', product)
-    .single()
-
-  if (fetchError) throw new Error(fetchError.message)
-  if (!sourceStock || sourceStock.quantity < qty) throw new Error('Insufficient stock.')
-
-  // Deduct from source
-  await supabase
-    .from(fromProvince)
-    .update({
-      quantity: sourceStock.quantity - qty,
-      modifiedby: getModifiedBy(),
+    const { error } = await supabase.rpc('transfer_store_stock', {
+      p_from_store: fromStore,
+      p_to_store: toStore,
+      p_productcode: productCode,
+      p_quantity: qty,
+      p_modifiedby: getModifiedBy(),
     })
-    .eq('productcode', product)
 
-  // Add to destination
-  const { data: destStock } = await supabase
-    .from(toProvince)
-    .select('quantity')
-    .eq('productcode', product)
-    .maybeSingle()
+    if (error) throw error
 
-  if (destStock) {
-    await supabase
-      .from(toProvince)
-      .update({
-        quantity: destStock.quantity + qty,
-        modifiedby: getModifiedBy(),
-      })
-      .eq('productcode', product)
-  } else {
-    await supabase.from(toProvince).insert({
-      productcode: product,
-      quantity: qty,
-      modifiedby: getModifiedBy(),
+    $q.notify({
+      type: 'positive',
+      message: `✅ ${qty} x ${productCode} moved from ${fromStore} → ${toStore}`,
+      position: 'top',
+      timeout: 5000,
+      icon: 'mdi-truck-delivery',
     })
+
+    dispatchQty.value = 0
+    selectedProduct.value = null
+  } catch (err) {
+    console.error('DPC Dispatch error:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message,
+      position: 'top',
+    })
+  } finally {
+    loading.value = false
   }
-
-  // ----------------------------------------------------------------------
-  // ✅ 1. Log to dispatchlogs (your existing function)
-  // ----------------------------------------------------------------------
-  await logDispatch({
-    from: fromProvince,
-    to: toProvince,
-    productcode: product,
-    quantity: qty,
-    status: 'STORE_TRANSFER',
-  })
-
-  // ----------------------------------------------------------------------
-  // ✅ 2. Write to dispatches table (NEW)
-  // ----------------------------------------------------------------------
-  const dispatchEntry = {
-    from_location: fromProvince,
-    to_location: toProvince,
-    productcode: product,
-    quantity: qty,
-    createdby: getModifiedBy(), // adjust if you want another field name
-    //status: 'Dispatched',
-    datecreated: new Date().toISOString(),
-  }
-
-  const { error: dispatchInsertError } = await supabase.from('dispatches').insert(dispatchEntry)
-
-  if (dispatchInsertError)
-    throw new Error('Failed to save dispatch entry: ' + dispatchInsertError.message)
-
-  // ----------------------------------------------------------------------
-
-  $q.notify({
-    type: 'positive',
-    message: `✅ ${qty} moved ${fromProvince} → ${toProvince}`,
-  })
 }
 
 // =======================================================
 // 🟦 3️⃣ PROMOS DISPATCH: Shop → PROMOS table
 // =======================================================
+
 async function handlePromoDispatch() {
-  const shop = getValue(fromValue.value, 'shopcode')
-  const product = getValue(selectedProduct.value, 'productcode')
-  const distributor = distributoridno.value?.trim()
+  if (loading.value) return
+  loading.value = true
 
-  if (!shop || !product || !distributor)
-    throw new Error('Please select shop, product, and distributor ID.')
+  try {
+    const shop = getValue(fromValue.value, 'shopcode') // dynamic shop table
+    const productCode = getValue(selectedProduct.value, 'productcode')
+    const distributorId = distributoridno.value?.trim()
+    const distributorName = distributorname.value || null
+    const qty = Number(dispatchQty.value)
+    const date = dispatchDate.value || null
 
-  const fromTable = `${shop}_STOCK`
-  const qty = Number(dispatchQty.value)
-  if (isNaN(qty) || qty <= 0) throw new Error('Invalid quantity.')
+    if (!shop || !productCode || !distributorId) {
+      throw new Error('Please select shop, product, and distributor ID.')
+    }
+    if (isNaN(qty) || qty <= 0) {
+      throw new Error('Invalid quantity.')
+    }
 
-  const { data: existing } = await supabase
-    .from(fromTable)
-    .select('quantity')
-    .eq('productcode', product)
-    .single()
-
-  if (!existing || existing.quantity < qty) throw new Error('Insufficient shop stock.')
-
-  // Deduct from shop
-  await supabase
-    .from(fromTable)
-    .update({
-      quantity: existing.quantity - qty,
-      modifiedby: getModifiedBy(),
+    const { error } = await supabase.rpc('promo_dispatch', {
+      p_shop_table: `${shop}_STOCK`,
+      p_productcode: productCode,
+      p_quantity: qty,
+      p_distributorid: distributorId,
+      p_distributorname: distributorName,
+      p_date: date,
+      p_modifiedby: getModifiedBy(),
     })
-    .eq('productcode', product)
 
-  // Record promo entry
-  await supabase.from('promos').insert({
-    shopcode: shop,
-    distributoridno: distributor,
-    distributorname: distributorname.value || null,
-    productcode: product,
-    quantity: qty,
-    date: dispatchDate.value || new Date().toISOString().slice(0, 10),
-    addedby: getModifiedBy(),
-  })
-  await logDispatch({
-    from: shop,
-    to: distributorname.value || distributor,
-    productcode: product,
-    quantity: qty,
-    status: 'PROMO_DISPATCH',
-  })
-  $q.notify({ type: 'positive', message: `🎁 ${qty} promo sent to ${distributor}` })
+    if (error) throw error
+
+    $q.notify({
+      type: 'positive',
+      message: `🎁 ${qty} promo units of ${productCode} sent to ${distributorId}`,
+      position: 'top',
+      timeout: 5000,
+      icon: 'mdi-gift',
+    })
+
+    // Reset fields
+    dispatchQty.value = 0
+    selectedProduct.value = null
+    distributoridno.value = ''
+    distributorname.value = ''
+  } catch (err) {
+    console.error('Promo Dispatch error:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message,
+      position: 'top',
+    })
+  } finally {
+    loading.value = false
+  }
 }
+
 // =======================================================
 // 🟦 4️⃣ EXPIRY DISPATCH: Shop → Expiry table (unique entries)
 // =======================================================
+
 async function handleExpiryDispatch() {
-  const shop = getValue(fromValue.value, 'shopcode')
-  const product = getValue(selectedProduct.value, 'productcode')
-  const qty = Number(dispatchQty.value)
-  const expDate = expiryDate.value // <-- use v-model bound ref
+  if (loading.value) return
+  loading.value = true
 
-  if (!shop || !product || isNaN(qty) || qty <= 0)
-    throw new Error('Please select shop, product, and valid quantity.')
+  try {
+    const shop = getValue(fromValue.value, 'shopcode')
+    const product = getValue(selectedProduct.value, 'productcode')
+    const qty = Number(dispatchQty.value)
+    const expDate = expiryDate.value
+    const table = `${shop}_STOCK`
 
-  if (!expDate) throw new Error('Please provide an expiry date.')
+    if (!shop || !product || isNaN(qty) || qty <= 0)
+      throw new Error('Please select shop, product, and valid quantity.')
 
-  const fromTable = `${shop}_STOCK`
+    if (!expDate) throw new Error('Please provide an expiry date.')
 
-  // Fetch current stock from shop
-  const { data: existing, error: fetchError } = await supabase
-    .from(fromTable)
-    .select('quantity')
-    .eq('productcode', product)
-    .single()
-
-  if (fetchError) throw new Error(`Error fetching stock from ${fromTable}: ${fetchError.message}`)
-  if (!existing || existing.quantity < qty) throw new Error('Not enough stock to mark expired.')
-
-  // Deduct from shop stock
-  const { error: deductError } = await supabase
-    .from(fromTable)
-    .update({
-      quantity: existing.quantity - qty,
-      modifiedby: getModifiedBy(),
+    const { error } = await supabase.rpc('expiry_dispatch', {
+      p_shop_table: table,
+      p_productcode: product,
+      p_quantity: qty,
+      p_expirydate: expDate,
+      p_modifiedby: getModifiedBy(),
     })
-    .eq('productcode', product)
 
-  if (deductError) throw new Error(`Error updating shop stock: ${deductError.message}`)
+    if (error) throw new Error(error.message)
 
-  // Insert new record in expiry table
-  const { error: insertError } = await supabase.from('expiry').insert({
-    shopcode: shop,
-    productcode: product,
-    quantity: qty,
-    expirydate: expDate, // <-- user-provided date
-    dateadded: new Date().toISOString().slice(0, 10),
-    modifiedby: getModifiedBy(),
-  })
-
-  if (insertError) throw new Error(`Error inserting into expiry table: ${insertError.message}`)
-
-  await logDispatch({
-    from: shop,
-    to: getModifiedBy(),
-    productcode: product,
-    quantity: qty,
-    status: 'EXPIRED_STOCK',
-  })
-
-  $q.notify({ type: 'positive', message: `🧾 ${qty} expired stock recorded successfully.` })
+    $q.notify({
+      type: 'positive',
+      message: `🧾 ${qty} expired units of ${product} recorded successfully.`,
+    })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.message })
+  } finally {
+    loading.value = false
+  }
 }
 
 // =======================================================
 // 🟦 5️⃣ DEBTS DISPATCH: Shop → DEBTS table
 // =======================================================
+
 async function handleDebtDispatch() {
-  const shop = getValue(fromValue.value, 'shopcode')
-  const product = getValue(selectedProduct.value, 'productcode')
-  const distributor = distributoridno.value?.trim()
-  const qty = Number(dispatchQty.value)
+  if (loading.value) return
+  loading.value = true
 
-  if (!shop || !product || !distributor)
-    throw new Error('Please select shop, product, and distributor ID.')
-  if (isNaN(qty) || qty <= 0) throw new Error('Invalid quantity.')
+  try {
+    const shop = getValue(fromValue.value, 'shopcode')
+    const product = getValue(selectedProduct.value, 'productcode')
+    const distributor = distributoridno.value?.trim()
+    const distributorName = distributorname.value || null
+    const qty = Number(dispatchQty.value)
+    const date = dispatchDate.value || new Date().toISOString().slice(0, 10)
 
-  const fromTable = `${shop}_STOCK`
+    if (!shop || !product || !distributor)
+      throw new Error('Please select shop, product, and distributor ID.')
+    if (isNaN(qty) || qty <= 0) throw new Error('Invalid quantity.')
 
-  const { data: existing } = await supabase
-    .from(fromTable)
-    .select('quantity')
-    .eq('productcode', product)
-    .single()
+    const table = `${shop}_STOCK`
 
-  if (!existing || existing.quantity < qty) throw new Error('Insufficient shop stock.')
-
-  // Deduct from shop
-  await supabase
-    .from(fromTable)
-    .update({
-      quantity: existing.quantity - qty,
-      modifiedby: getModifiedBy(),
+    const { error } = await supabase.rpc('debt_dispatch', {
+      p_shop_table: table,
+      p_productcode: product,
+      p_quantity: qty,
+      p_distributorid: distributor,
+      p_distributorname: distributorName,
+      p_date: date,
+      p_addedby: getModifiedBy(),
     })
-    .eq('productcode', product)
 
-  // Record debt
-  await supabase.from('debts').insert({
-    shopcode: shop,
-    distributoridno: distributor,
-    distributorname: distributorname.value || null,
-    productcode: product,
-    quantity: qty,
-    date: dispatchDate.value || new Date().toISOString().slice(0, 10),
-    addedby: getModifiedBy(),
-  })
+    if (error) throw new Error(error.message)
 
-  $q.notify({ type: 'warning', message: `💳 ${qty} recorded as debt for ${distributor}` })
+    $q.notify({
+      type: 'warning',
+      message: `💳 ${qty} of ${product} recorded as debt for ${distributor}`,
+    })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err.message })
+  } finally {
+    loading.value = false
+  }
 }
+
 // =======================================================
 // REUSABLE LOGGING FUNCTION
 // =======================================================
-
-async function logDispatch({ from, to, productcode, quantity }) {
-  try {
-    const { data, error } = await supabase.from('dispatchlogs').insert([
-      {
-        from_location: from,
-        to_location: to,
-        productcode,
-        quantity,
-        dispatchedby: getModifiedBy(),
-      },
-    ])
-
-    if (error) {
-      console.error('❌ Full Supabase error:', error)
-      $q.notify({
-        type: 'negative',
-        message: `Error logging dispatch: ${error.message || 'Unknown error'}`,
-      })
-      return
-    }
-
-    console.log('✅ Dispatch log saved:', data)
-  } catch (err) {
-    console.error('💥 Unexpected JS error:', err)
-    $q.notify({ type: 'negative', message: `Unexpected error: ${err.message}` })
-  }
-}
 
 // =======================================================
 // 🟩 Master Dispatch Controller
@@ -1128,6 +1029,7 @@ async function submitDispatch() {
   }
 }
 </script>
+
 <style scoped>
 /* Make radio group shrink proportionally on mobile */
 .dispatch-type-group {
