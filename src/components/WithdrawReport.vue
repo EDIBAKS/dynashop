@@ -7,50 +7,65 @@
       </div>
 
       <div class="row no-wrap items-stretch q-col-gutter-sm full-width">
-        <div class="col">
-          <!-- ADMIN or SUPERADMIN -->
-          <q-select
-            v-if="isAdminOrSuperAdmin"
-            v-model="fromValue"
-            :options="fromOptions"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            label="From"
-            dense
-            outlined
-            class="full-width"
-            @update:model-value="loadToOptions"
-          />
+        <!-- ===================== P2P ===================== -->
+        <template v-if="dispatchType === 'P2P'">
+          <div class="col">
+            <q-select
+              v-if="isAdminOrSuperAdmin"
+              v-model="fromValue"
+              :options="fromOptions"
+              label="From Province"
+              dense
+              outlined
+              emit-value
+              map-options
+              @update:model-value="loadToOptions"
+            />
+          </div>
 
-          <!-- NORMAL USER -->
-          <q-input
-            v-else
-            v-model="fromValue"
-            label="Your DPC"
-            outlined
-            dense
-            readonly
-            input-class="text-blue text-bold text-center"
-          />
-        </div>
+          <div class="col" v-if="isAdminOrSuperAdmin">
+            <q-select
+              v-model="toValue"
+              :options="toOptions"
+              label="To Province"
+              dense
+              outlined
+              emit-value
+              map-options
+            />
+          </div>
+        </template>
 
-        <div class="col" v-if="isAdminOrSuperAdmin">
-          <!-- TO SELECT ONLY FOR ADMIN/SUPERADMIN -->
-          <q-select
-            v-model="toValue"
-            :options="toOptions"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            label="To"
-            dense
-            outlined
-            class="full-width"
-          />
-        </div>
+        <!-- ===================== S2P ===================== -->
+        <template v-else-if="dispatchType === 'S2P'">
+          <!-- TO: Province FIRST -->
+          <div class="col">
+            <q-select
+              v-model="toValue"
+              :options="provinceOptions"
+              label="To Province"
+              dense
+              outlined
+              emit-value
+              map-options
+              @update:model-value="loadShopsForS2P"
+            />
+          </div>
+
+          <!-- FROM: Shop -->
+          <div class="col">
+            <q-select
+              v-model="fromValue"
+              :options="fromOptions"
+              label="From Shop"
+              dense
+              outlined
+              emit-value
+              map-options
+              :disable="!toValue"
+            />
+          </div>
+        </template>
       </div>
 
       <div class="row q-col-gutter-sm q-mt-md">
@@ -98,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from 'boot/supabase'
 import { useAuth } from 'stores/auth'
 import { useQuasar } from 'quasar'
@@ -112,6 +127,7 @@ const $q = useQuasar()
 const dispatchType = ref('P2P')
 const fromOptions = ref([])
 const toOptions = ref([])
+const provinceOptions = ref([])
 
 const fromValue = ref(null)
 const toValue = ref(null)
@@ -137,7 +153,7 @@ const dispatchTypes = computed(() => {
   return isAdminOrSuperAdmin.value
     ? [
         { label: 'Province → Province', value: 'P2P' },
-        { label: 'Province → Shop', value: 'P2S' },
+        { label: 'Shop → Province', value: 'S2P' }, // ✅ FIX
       ]
     : [{ label: 'Shop Withdraws', value: 'SHOP' }]
 })
@@ -159,23 +175,52 @@ function formatDate(dateString) {
   return `${dd}-${mm}-${yyyy}:${hh}-${min}`
 }
 
+// WATCHERS TO UPDATE SELECTS BASED ON DISPATCH TYPE
+watch([dispatchType, fromValue], async () => {
+  if (!fromValue.value && dispatchType.value !== 'SHOP') return
+
+  if (dispatchType.value === 'P2P') {
+    // Both From & To are provinces
+    fromOptions.value = await fetchProvinces() // in case From changed dynamically
+    toOptions.value = fromOptions.value.filter((p) => p.value !== fromValue.value)
+  } else if (dispatchType.value === 'S2P') {
+    // From = Shops in user's province, To = Provinces
+    await fetchShops(auth.userDetails?.province_code)
+    toOptions.value = fromOptions.value.filter((p) => p.value !== auth.userDetails?.province_code)
+  }
+})
+
+watch(dispatchType, async (type) => {
+  fromValue.value = null
+  toValue.value = null
+  fromOptions.value = []
+  toOptions.value = []
+
+  if (type === 'P2P') {
+    fromOptions.value = provinceOptions.value
+  }
+
+  if (type === 'S2P') {
+    toOptions.value = provinceOptions.value
+  }
+})
+
 /* ---------------------------------------------------
    FETCH PROVINCES
 --------------------------------------------------- */
 async function fetchProvinces() {
-  if (!auth.userDetails?.country_code) return
-
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('province')
     .select('name, province_code')
     .eq('country_code', auth.userDetails.country_code)
 
-  if (!error) {
-    fromOptions.value = data.map((p) => ({
-      label: p.name,
-      value: p.province_code,
-    }))
-  }
+  provinceOptions.value = data.map((p) => ({
+    label: p.name,
+    value: p.province_code,
+  }))
+
+  // Used for P2P From
+  fromOptions.value = provinceOptions.value
 }
 
 /* ---------------------------------------------------
@@ -195,6 +240,20 @@ async function fetchShops(province_code) {
   toOptions.value = data.map((shop) => ({
     label: shop.shop_name,
     value: shop.shopcode,
+  }))
+}
+
+async function loadShopsForS2P(provinceCode) {
+  fromValue.value = null
+
+  const { data } = await supabase
+    .from('shops')
+    .select('shop_name, shopcode')
+    .eq('province_code', provinceCode)
+
+  fromOptions.value = data.map((s) => ({
+    label: s.shop_name,
+    value: s.shopcode,
   }))
 }
 
@@ -282,6 +341,8 @@ onMounted(async () => {
 
   if (!isAdminOrSuperAdmin.value) {
     fromValue.value = auth.userDetails?.dpc_id
+    await fetchShops(auth.userDetails?.province_code)
+  } else if (dispatchType.value === 'S2P') {
     await fetchShops(auth.userDetails?.province_code)
   }
 })

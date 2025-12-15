@@ -93,6 +93,7 @@
                   :options="[
                     { label: 'List View', value: 'list' },
                     { label: 'Table View', value: 'table' },
+                    { label: 'Per Shop', value: 'shop' },
                   ]"
                   type="radio"
                   color="primary"
@@ -100,11 +101,9 @@
               </div>
 
               <div class="q-mt-md">
-                <!-- 🔥 SHOW LIST VIEW -->
                 <stockMonitor v-if="displayMode === 'list'" />
-
-                <!-- 🔥 SHOW TABLE VIEW -->
-                <stockTable v-else />
+                <stockTable v-else-if="displayMode === 'table'" />
+                <shopView v-else-if="displayMode === 'shop'" />
               </div>
             </q-tab-panel>
 
@@ -136,6 +135,7 @@ import dispatchForm from '../components/dispatchForm.vue'
 import WithdrawForm from 'src/components/withdrawForm.vue'
 import stockMonitor from 'src/components/stockMonitor.vue'
 import stockTable from 'src/components/stockTable.vue'
+import shopView from 'src/components/shopView.vue'
 import ExxtractionPage from 'src/components/ExxtractionPage.vue'
 import dispatchReport from 'src/components/dispatchReport.vue'
 import WithdrawReport from 'src/components/WithdrawReport.vue'

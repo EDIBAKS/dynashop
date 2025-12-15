@@ -97,7 +97,7 @@ const selectedFrom = ref(null)
 const selectedTo = ref(null)
 const selectedProduct = ref(null)
 const availableStock = ref(0)
-const quantity = ref(null)
+const quantity = ref(0)
 
 // 🟦 Options
 const withdrawOptions = [
@@ -147,23 +147,29 @@ async function fetchActiveProducts() {
 }
 
 // ✅ Populate select lists based on selected type
+// ✅ Populate select lists based on selected type
 function populateOptions() {
   if (withdrawType.value === 'DPC') {
-    // Both FROM and TO will show provinces
+    // FROM & TO → Provinces
     const provinces = provinceOptions.value.map((p) => ({
       name: p.name,
       code: p.province_code,
     }))
+
     fromOptions.value = provinces
     toOptions.value = provinces
   } else if (withdrawType.value === 'SHOP') {
-    // Both FROM and TO will show shops
-    const shops = shopOptions.value.map((s) => ({
+    // FROM → Shops
+    fromOptions.value = shopOptions.value.map((s) => ({
       name: s.shop_name,
       code: s.shopcode,
     }))
-    fromOptions.value = shops
-    toOptions.value = shops
+
+    // TO → Provinces (return stock to province store)
+    toOptions.value = provinceOptions.value.map((p) => ({
+      name: p.name,
+      code: p.province_code,
+    }))
   }
 }
 
@@ -226,77 +232,53 @@ async function fetchAvailableStock() {
 }
 
 async function submitWithdrawJS() {
-  const qty = quantity.value
+  const qty = Number(quantity.value)
+  const product = selectedProduct.value
   const currentUser = auth.userDetails?.firstname || 'Unknown'
-  const fromTable =
-    withdrawType.value === 'DPC' ? selectedFrom.value : `${selectedFrom.value}_STOCK`
-  const toTable = withdrawType.value === 'DPC' ? selectedTo.value : `${selectedTo.value}_STOCK`
 
-  try {
-    // 1️⃣ Check and reduce stock in "from" table
-    const { data: fromData } = await supabase
-      .from(fromTable)
-      .select('quantity')
-      .eq('productcode', selectedProduct.value)
-      .maybeSingle()
+  if (!qty || qty <= 0) throw new Error('Invalid quantity')
+  if (!product) throw new Error('Select a product')
 
-    if (!fromData || fromData.quantity < qty) throw new Error('Insufficient stock')
+  // 🔹 Determine FROM and TO tables
+  let fromTable = null
+  let toProvince = null
 
-    await supabase
-      .from(fromTable)
-      .update({
-        quantity: fromData.quantity - qty,
-        modifiedby: currentUser,
-        lastmodified: new Date(), // optional timestamp
-      })
-      .eq('productcode', selectedProduct.value)
-
-    // 2️⃣ Add stock to "to" table
-    const { data: toData } = await supabase
-      .from(toTable)
-      .select('quantity')
-      .eq('productcode', selectedProduct.value)
-      .maybeSingle()
-
-    if (toData) {
-      await supabase
-        .from(toTable)
-        .update({
-          quantity: toData.quantity + qty,
-          modifiedby: currentUser,
-          lastmodified: new Date(), // optional timestamp
-        })
-        .eq('productcode', selectedProduct.value)
-    } else {
-      await supabase
-        .from(toTable)
-        .insert([{ productcode: selectedProduct.value, quantity: qty, modifiedby: currentUser }])
-    }
-
-    // 3️⃣ Record withdrawal
-    await supabase.from('withdraws').insert([
-      {
-        id: crypto.randomUUID(),
-        datecreated: new Date(),
-        from: selectedFrom.value,
-        to: selectedTo.value,
-        productcode: selectedProduct.value,
-        quantity: qty,
-        createdby: currentUser,
-      },
-    ])
-
-    $q.notify({ type: 'positive', message: 'Withdrawal successful!' })
-
-    // ✅ Reset form
-    selectedFrom.value = null
-    selectedTo.value = null
-    selectedProduct.value = null
-    quantity.value = null
-    availableStock.value = 0
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err.message })
+  if (withdrawType.value === 'DPC') {
+    // Province → Province
+    fromTable = selectedFrom.value?.toUpperCase() // e.g. "PON"
+    toProvince = selectedTo.value?.toUpperCase() // e.g. "LOA"
+  } else if (withdrawType.value === 'SHOP') {
+    // Shop → Province
+    fromTable = `${selectedFrom.value?.toUpperCase()}_STOCK` // e.g. "MOU_STOCK"
+    toProvince = selectedTo.value?.toUpperCase() // e.g. "PON"
+  } else {
+    throw new Error('Invalid withdrawal type')
   }
+
+  if (!fromTable || !toProvince) throw new Error('Please select FROM and TO locations')
+
+  // 🚀 Call RPC
+  const { error } = await supabase.rpc('withdraw_stock', {
+    p_from_table: fromTable,
+    p_to_province: toProvince,
+    p_productcode: product,
+    p_quantity: qty,
+    p_createdby: currentUser,
+  })
+
+  if (error) throw new Error(error.message)
+
+  $q.notify({
+    type: 'positive',
+    message: `📦 ${qty} ${product} transferred successfully`,
+  })
+
+  // 🔄 Reset
+  selectedFrom.value = null
+  selectedTo.value = null
+  selectedProduct.value = null
+  quantity.value = 0
+  availableStock.value = 0
 }
 
 // 🧠 Form Ready Check
