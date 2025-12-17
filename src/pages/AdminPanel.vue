@@ -34,6 +34,9 @@
               <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'StockReport'">
                 <q-item-section>Stock Report</q-item-section>
               </q-item>
+              <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'SalesReport'">
+                <q-item-section>Sales Report</q-item-section>
+              </q-item>
               <q-item v-if="isSuperAdmin" clickable @click="tab = 'Extraction'">
                 <q-item-section>Data Extract</q-item-section>
               </q-item>
@@ -106,6 +109,13 @@
                 <shopView v-else-if="displayMode === 'shop'" />
               </div>
             </q-tab-panel>
+            <q-tab-panel name="SalesReport">
+              <div class="text-h6">📊 Reports</div>
+
+              <!-- 🔥 RADIO BUTTONS -->
+
+              <SalesReport />
+            </q-tab-panel>
 
             <q-tab-panel name="Extraction">
               <div class="text-h6">📊 Admin Only</div>
@@ -139,6 +149,7 @@ import shopView from 'src/components/shopView.vue'
 import ExxtractionPage from 'src/components/ExxtractionPage.vue'
 import dispatchReport from 'src/components/dispatchReport.vue'
 import WithdrawReport from 'src/components/WithdrawReport.vue'
+import SalesReport from 'src/components/salesReport.vue'
 const auth = useAuth()
 const currentDate = ref('')
 const tab = ref('Dispatch')

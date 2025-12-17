@@ -42,6 +42,42 @@
             debounce="300"
             class="q-mb-md full-width"
           />
+          <q-card flat bordered class="q-pa-sm q-mb-md">
+            <div class="text-subtitle2 q-mb-sm">Show / Hide Columns</div>
+
+            <!-- Columns ready -->
+            <div v-if="allColumns.length" class="row q-col-gutter-sm">
+              <div
+                v-for="col in allColumns"
+                :key="col.name"
+                class="col-6 col-sm-4 col-md-3 col-lg-2"
+              >
+                <q-checkbox v-model="visibleColumns" :val="col.name" :label="col.label" dense />
+              </div>
+            </div>
+
+            <!-- Loading fallback -->
+            <div v-else class="text-caption text-grey">Columns loading…</div>
+
+            <q-separator spaced />
+
+            <div class="row q-gutter-sm">
+              <q-btn
+                size="sm"
+                outline
+                label="Select All"
+                color="primary"
+                @click="selectAllColumns"
+              />
+              <q-btn
+                size="sm"
+                outline
+                label="Clear All"
+                color="negative"
+                @click="clearAllColumns"
+              />
+            </div>
+          </q-card>
 
           <!-- BUTTONS ROW -->
           <div class="row q-gutter-sm items-center justify-between">
@@ -61,41 +97,8 @@
             </div>
 
             <!-- COLUMN VISIBILITY MENU (RIGHT) -->
-            <q-btn flat round dense icon="visibility">
-              <q-menu anchor="bottom right" self="top right">
-                <div class="q-pa-sm" style="min-width: 200px; max-height: 300px; overflow-y: auto">
-                  <div class="text-subtitle2 q-mb-sm">Show/Hide Columns</div>
-
-                  <q-checkbox
-                    v-for="col in allColumns"
-                    :key="col.name"
-                    v-model="visibleColumns"
-                    :val="col.name"
-                    :label="col.label"
-                    dense
-                  />
-
-                  <q-separator spaced />
-
-                  <div class="row justify-between">
-                    <q-btn
-                      size="sm"
-                      flat
-                      label="Select All"
-                      color="primary"
-                      @click="selectAllColumns"
-                    />
-                    <q-btn
-                      size="sm"
-                      flat
-                      label="Clear All"
-                      color="negative"
-                      @click="clearAllColumns"
-                    />
-                  </div>
-                </div>
-              </q-menu>
-            </q-btn>
+            <!-- 
+            -->
           </div>
         </q-card-section>
 
