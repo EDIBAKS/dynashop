@@ -248,7 +248,7 @@ const fromValue = ref(null)
 const toValue = ref(null)
 const localProvinces = ref([])
 const localShops = ref([])
-const dispatchDate = ref('')
+const dispatchDate = ref(localStorage.getItem('dispatchDate') || '')
 const expiryDate = ref('')
 const selectedProduct = ref(null)
 const dispatchQty = ref(1)
@@ -462,6 +462,12 @@ watch(
   },
   { immediate: true }, // run immediately on component mount
 )
+
+watch(dispatchDate, (newDate) => {
+  if (newDate) {
+    localStorage.setItem('dispatchDate', newDate)
+  }
+})
 
 // Watch for changes in province or product selection
 watch(
@@ -684,7 +690,7 @@ function resetDispatchForm() {
   //dispatchType.value = null
   //fromValue.value = null
   //toValue.value = null
-  dispatchDate.value = ''
+  //dispatchDate.value = ''
   expiryDate.value = ''
   distributoridno.value = ''
   distributorname.value = ''
@@ -766,6 +772,7 @@ async function handleShopDispatch() {
       p_productname: productname,
       p_quantity: qty,
       p_modifiedby: getModifiedBy(),
+      p_dispatch_date: dispatchDate.value,
     })
 
     if (error) throw error
@@ -814,6 +821,7 @@ async function handleDPCDispatch() {
       p_productcode: productCode,
       p_quantity: qty,
       p_modifiedby: getModifiedBy(),
+      p_dispatch_date: dispatchDate.value, // ✅ IMPORTANT
     })
 
     if (error) throw error
