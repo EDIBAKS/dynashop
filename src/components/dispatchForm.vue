@@ -652,35 +652,53 @@ async function loadShops() {
 }
 
 function populateSelects() {
-  if (dispatchType.value === 'DPC') {
-    // 🔹 Both FROM and TO use provinces
-    fromOptions.value = localProvinces.value
-    toOptions.value = localProvinces.value
-    fromValue.value = null
-    toValue.value = null
-  } else if (dispatchType.value === 'SHOPS') {
-    // 🔹 FROM → provinces, TO → shops
-    fromOptions.value = localProvinces.value
+  const userProvinceCode = auth.userDetails?.province_code
 
-    if (isSuperAdmin.value) {
-      // All shops in the country
+  if (dispatchType.value === 'DPC') {
+    if (isAdminRestrictedFrom.value) {
+      // 🔒 Admin: FROM locked to own province
+      const province = localProvinces.value.find((p) => p.province_code === userProvinceCode)
+
+      fromOptions.value = province ? [province] : []
+      fromValue.value = province || null
+
+      // TO can still be all provinces (except same one, optional)
+      toOptions.value = localProvinces.value.filter((p) => p.province_code !== userProvinceCode)
+      toValue.value = null
+    } else {
+      // 🟢 SuperAdmin
+      fromOptions.value = localProvinces.value
+      toOptions.value = localProvinces.value
+      fromValue.value = null
+      toValue.value = null
+    }
+  } else if (dispatchType.value === 'SHOPS') {
+    if (isAdminRestrictedFrom.value) {
+      // 🔒 Admin: FROM locked to own province
+      const province = localProvinces.value.find((p) => p.province_code === userProvinceCode)
+
+      fromOptions.value = province ? [province] : []
+      fromValue.value = province || null
+
+      // TO → shops in same province
+      toOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
+      toValue.value = null
+    } else {
+      // 🟢 SuperAdmin
+      fromOptions.value = localProvinces.value
       toOptions.value = localShops.value
-    } else if (isAdmin.value) {
-      // Only shops within same province
-      const provinceCode = auth.userDetails?.province_code
-      fromValue.value = localProvinces.value.find((p) => p.province_code === provinceCode)
-      toOptions.value = localShops.value.filter((s) => s.province_code === provinceCode)
+      fromValue.value = null
+      toValue.value = null
     }
   } else if (['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType.value)) {
-    // 🔹 PROMOS, EXPIRY, and DEBTS → only one select (FROM) showing shops
     if (isSuperAdmin.value) {
       fromOptions.value = localShops.value
-    } else if (isAdmin.value) {
-      const provinceCode = auth.userDetails?.province_code
-      fromOptions.value = localShops.value.filter((s) => s.province_code === provinceCode)
+    } else {
+      // Admin → only shops in his province
+      fromOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
     }
 
-    // Hide TO select for these types
+    fromValue.value = null
     toOptions.value = []
     toValue.value = null
   }
@@ -698,6 +716,10 @@ function resetDispatchForm() {
   availableStock.value = 0
   dispatchQty.value = 0
 }
+
+const isAdminRestrictedFrom = computed(() => {
+  return isAdmin.value && !isSuperAdmin.value && ['SHOPS', 'DPC'].includes(dispatchType.value)
+})
 
 // ✅ Watch for dispatch type change
 //watch(dispatchType, () => populateSelects())
@@ -934,6 +956,7 @@ async function handleExpiryDispatch() {
       p_quantity: qty,
       p_expirydate: expDate,
       p_modifiedby: getModifiedBy(),
+      p_dispatch_date: dispatchDate.value, // ✅ IMPORTANT
     })
 
     if (error) throw new Error(error.message)

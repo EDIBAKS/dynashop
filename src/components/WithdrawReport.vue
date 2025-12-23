@@ -284,14 +284,12 @@ async function fetchProducts() {
 --------------------------------------------------- */
 const mappedDispatches = computed(() => {
   return dispatches.value.map((d) => {
-    const fromName = fromOptions.value.find((p) => p.value === d.from)?.label || d.from
+    const fromName = fromOptions.value?.find?.((p) => p.value === d.from)?.label || d.from
 
-    const toName = toOptions.value.find((p) => p.value === d.to)?.label || d.to
+    const toName = toOptions.value?.find?.((p) => p.value === d.to)?.label || d.to
 
     const product = productsMap.value[d.productcode] || {}
-
     const price = product.distributorprice || 0
-    const value = price * d.quantity
 
     return {
       fromName,
@@ -299,7 +297,7 @@ const mappedDispatches = computed(() => {
       productcode: d.productcode,
       productname: product.productname || d.productcode,
       quantity: d.quantity,
-      value,
+      value: price * d.quantity,
       createdby: d.createdby,
       datecreated: formatDate(d.datecreated),
     }

@@ -1,6 +1,6 @@
 <template>
   <q-card flat bordered class="q-pa-md bg-transparent" style="max-width: 600px; margin: auto">
-    <q-form @submit.prevent="submitWithdrawJS" class="column q-gutter-md">
+    <q-form ref="formRef" @submit.prevent="submitWithdrawJS" class="column q-gutter-md">
       <!-- 🟦 Withdraw Type -->
       <div class="text-center text-subtitle2 text-bold">Withdraw Type</div>
       <q-option-group
@@ -40,7 +40,7 @@
       <!-- 🟩 Product Select -->
       <q-select
         v-model="selectedProduct"
-        :options="activeProducts"
+        :options="filteredProducts"
         option-label="productname"
         option-value="productcode"
         label="Select Product"
@@ -48,7 +48,12 @@
         outlined
         emit-value
         map-options
-        @update:model-value="fetchAvailableStock"
+        use-input
+        input-debounce="300"
+        fill-input
+        hide-selected
+        @filter="filterProducts"
+        @update:model-value="onProductSelected"
       />
 
       <!-- 🟦 Available Stock -->
@@ -68,6 +73,7 @@
         label="Quantity to Withdraw"
         dense
         outlined
+        lazy-rules
         :rules="[
           (val) => val > 0 || 'Enter a valid quantity',
           (val) => val <= availableStock || 'Cannot exceed available stock',
@@ -98,7 +104,7 @@ const selectedTo = ref(null)
 const selectedProduct = ref(null)
 const availableStock = ref(0)
 const quantity = ref(0)
-
+const formRef = ref(null)
 // 🟦 Options
 const withdrawOptions = [
   { label: 'DPC', value: 'DPC' },
@@ -143,35 +149,127 @@ async function fetchActiveProducts() {
     .select('productname, productcode')
     .eq('status', 'active')
 
-  if (!error && data) activeProducts.value = data
+  if (!error && data) {
+    activeProducts.value = data
+    filteredProducts.value = data // 👈 important
+  }
 }
 
-// ✅ Populate select lists based on selected type
+function onProductSelected() {
+  // 🚫 FROM not selected
+  if (!selectedFrom.value) {
+    $q.notify({
+      type: 'warning',
+      message: 'Please select FROM location first',
+      position: 'top',
+    })
+
+    // 🔄 Reset product
+    selectedProduct.value = null
+    availableStock.value = 0
+    return
+  }
+
+  // ✅ FROM selected → proceed
+  fetchAvailableStock()
+}
+
 // ✅ Populate select lists based on selected type
 function populateOptions() {
   if (withdrawType.value === 'DPC') {
-    // FROM & TO → Provinces
-    const provinces = provinceOptions.value.map((p) => ({
-      name: p.name,
-      code: p.province_code,
-    }))
-
-    fromOptions.value = provinces
-    toOptions.value = provinces
+    if (auth.userDetails?.role === 'SuperAdmin') {
+      // SuperAdmin → can withdraw from any province
+      fromOptions.value = provinceOptions.value.map((p) => ({
+        name: p.name,
+        code: p.province_code,
+      }))
+      toOptions.value = provinceOptions.value.map((p) => ({ name: p.name, code: p.province_code }))
+    } else {
+      // Admin → cannot withdraw from DPC
+      fromOptions.value = [] // empty
+      toOptions.value = [] // empty
+      selectedFrom.value = null
+      selectedTo.value = null
+      $q.notify({
+        type: 'warning',
+        message: 'Admins cannot withdraw from DPC. Please select SHOP.',
+      })
+    }
   } else if (withdrawType.value === 'SHOP') {
-    // FROM → Shops
-    fromOptions.value = shopOptions.value.map((s) => ({
-      name: s.shop_name,
-      code: s.shopcode,
-    }))
+    // FROM → only shops within admin's province
+    let filteredShops = shopOptions.value
+    if (auth.userDetails?.role === 'Admin') {
+      filteredShops = shopOptions.value.filter(
+        (s) => s.province_code === auth.userDetails.province_code,
+      )
+    }
 
-    // TO → Provinces (return stock to province store)
-    toOptions.value = provinceOptions.value.map((p) => ({
-      name: p.name,
-      code: p.province_code,
-    }))
+    fromOptions.value = filteredShops.map((s) => ({ name: s.shop_name, code: s.shopcode }))
+
+    // TO → province store (Admin can only return to their province)
+    let filteredProvinces = provinceOptions.value
+    if (auth.userDetails?.role === 'Admin') {
+      filteredProvinces = provinceOptions.value.filter(
+        (p) => p.province_code === auth.userDetails.province_code,
+      )
+    }
+    toOptions.value = filteredProvinces.map((p) => ({ name: p.name, code: p.province_code }))
+
+    // Reset selected values
+    selectedFrom.value = null
+    selectedTo.value = null
   }
 }
+
+const filteredProducts = ref([])
+
+/**
+ * Called automatically when user types in the select
+ */
+function filterProducts(val, update) {
+  // 🚫 Prevent searching before FROM is selected
+  if (!selectedFrom.value) {
+    update(() => {
+      filteredProducts.value = []
+    })
+    return
+  }
+
+  update(() => {
+    if (!val) {
+      filteredProducts.value = activeProducts.value
+    } else {
+      const needle = val.toLowerCase()
+      filteredProducts.value = activeProducts.value.filter((p) =>
+        p.productname.toLowerCase().includes(needle),
+      )
+    }
+  })
+}
+
+watch(withdrawType, async (newVal, oldVal) => {
+  if (oldVal && newVal !== oldVal) {
+    Dialog.create({
+      title: 'Confirm Switch',
+      message: `Switch withdraw type to ${newVal}? This will reset your form.`,
+      cancel: true,
+      persistent: true,
+    })
+      .onOk(() => {
+        selectedFrom.value = null
+        selectedTo.value = null
+        selectedProduct.value = null
+        availableStock.value = 0
+        quantity.value = null
+        populateOptions() // applies role restrictions
+      })
+      .onCancel(() => {
+        withdrawType.value = oldVal // revert
+      })
+  } else {
+    populateOptions()
+  }
+})
 
 // ✅ Watcher for withdrawType — triggers when user switches
 watch(withdrawType, async (newVal, oldVal) => {
@@ -231,60 +329,78 @@ async function fetchAvailableStock() {
   }
 }
 
-async function submitWithdrawJS() {
-  const qty = Number(quantity.value)
-  const product = selectedProduct.value
-  const currentUser = auth.userDetails?.firstname || 'Unknown'
+const submitWithdrawJS = async () => {
+  // 🔐 Always validate the form first
+  const valid = await formRef.value.validate()
+  if (!valid) return
 
-  if (!qty || qty <= 0) throw new Error('Invalid quantity')
-  if (!product) throw new Error('Select a product')
+  try {
+    const qty = quantity.value
+    const product = selectedProduct.value
+    const currentUser = auth.userDetails?.firstname || 'Unknown'
 
-  // 🔹 Determine FROM and TO tables
-  let fromTable = null
-  let toProvince = null
+    // 🔹 Determine FROM and TO
+    let fromTable
+    let toProvince
 
-  if (withdrawType.value === 'DPC') {
-    // Province → Province
-    fromTable = selectedFrom.value?.toUpperCase() // e.g. "PON"
-    toProvince = selectedTo.value?.toUpperCase() // e.g. "LOA"
-  } else if (withdrawType.value === 'SHOP') {
-    // Shop → Province
-    fromTable = `${selectedFrom.value?.toUpperCase()}_STOCK` // e.g. "MOU_STOCK"
-    toProvince = selectedTo.value?.toUpperCase() // e.g. "PON"
-  } else {
-    throw new Error('Invalid withdrawal type')
+    if (withdrawType.value === 'DPC') {
+      // Province → Province
+      fromTable = selectedFrom.value.toUpperCase()
+      toProvince = selectedTo.value.toUpperCase()
+    } else if (withdrawType.value === 'SHOP') {
+      // Shop → Province
+      fromTable = `${selectedFrom.value.toUpperCase()}_STOCK`
+      toProvince = selectedTo.value.toUpperCase()
+    } else {
+      throw new Error('Invalid withdrawal type')
+    }
+
+    // 🚀 Call RPC
+    const { error } = await supabase.rpc('withdraw_stock', {
+      p_from_table: fromTable,
+      p_to_province: toProvince,
+      p_productcode: product,
+      p_quantity: qty,
+      p_createdby: currentUser,
+    })
+
+    if (error) throw error
+
+    // ✅ Success
+    $q.notify({
+      type: 'positive',
+      message: `📦 ${qty} ${product} transferred successfully`,
+    })
+
+    // 🔄 Reset form state
+    selectedFrom.value = null
+    selectedTo.value = null
+    selectedProduct.value = null
+    quantity.value = 0
+    availableStock.value = 0
+
+    formRef.value.resetValidation()
+  } catch (err) {
+    console.error(err)
+
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Withdrawal failed',
+    })
   }
-
-  if (!fromTable || !toProvince) throw new Error('Please select FROM and TO locations')
-
-  // 🚀 Call RPC
-  const { error } = await supabase.rpc('withdraw_stock', {
-    p_from_table: fromTable,
-    p_to_province: toProvince,
-    p_productcode: product,
-    p_quantity: qty,
-    p_createdby: currentUser,
-  })
-
-  if (error) throw new Error(error.message)
-
-  $q.notify({
-    type: 'positive',
-    message: `📦 ${qty} ${product} transferred successfully`,
-  })
-
-  // 🔄 Reset
-  selectedFrom.value = null
-  selectedTo.value = null
-  selectedProduct.value = null
-  quantity.value = 0
-  availableStock.value = 0
 }
 
 // 🧠 Form Ready Check
-const formReady = computed(
-  () => selectedFrom.value && selectedTo.value && selectedProduct.value && quantity.value,
-)
+const formReady = computed(() => {
+  return (
+    !!withdrawType.value &&
+    !!selectedFrom.value &&
+    !!selectedTo.value &&
+    !!selectedProduct.value &&
+    quantity.value > 0 &&
+    quantity.value <= availableStock.value
+  )
+})
 
 // 🟩 On mount: load data and default DPC mode
 onMounted(async () => {
