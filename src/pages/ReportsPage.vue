@@ -607,82 +607,55 @@
                 {{ $t('NoTallies') }}
               </div>
 
-              <q-card
-                v-else
-                v-for="day in dailyTallies"
-                :key="day.date"
-                flat
-                bordered
-                class="q-mb-md full-width bg-transparent"
-              >
-                <!-- Products table -->
-                <q-card-section>
-                  <div class="table-responsive">
-                    <table class="q-table q-mb-sm bg-white" style="width: 100%">
-                      <thead>
-                        <tr>
-                          <th colspan="7" class="text-left text-black text-bold">
-                            {{ formatDateTime(day.date) }}
-                          </th>
-                        </tr>
-                        <tr class="text-bold">
-                          <th>{{ $t('Productcode') }}</th>
-                          <th>{{ $t('ProductName') }}</th>
-                          <th>{{ $t('Quantity') }}</th>
-                          <th>{{ $t('DistributorPrice') }}</th>
-                          <th>BV</th>
-                          <th>{{ $t('Amount') }}</th>
-                        </tr>
-                        <!-- Separator line -->
-                        <tr>
-                          <th colspan="7" style="padding: 0">
-                            <hr style="border: 1px solid #000; margin: 0" />
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        <tr v-for="item in day.items" :key="item.productcode">
-                          <td>{{ item.productcode }}</td>
-                          <td>{{ item.productname }}</td>
-                          <td class="text-bold text-blue-9">{{ item.quantity }}</td>
-                          <td>{{ item.unitprice.toFixed(2) }}</td>
-
-                          <td>
-                            {{ (item.bvs * item.quantity).toFixed(2) }}
-                          </td>
-                          <td>
-                            {{ convert((item.unitprice * item.quantity).toFixed(2)) }}
-                          </td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr class="bg-grey-3 text-bold">
-                          <td colspan="3" class="text-right">
-                            Total for {{ formatDateTime(day.date) }}:
-                          </td>
-                          <td class="text-bold">
-                            Prdts:{{ day.items.reduce((sum, i) => sum + i.quantity, 0) }}
-                          </td>
-                          <td>
-                            {{
-                              day.items.reduce((sum, i) => sum + i.bvs * i.quantity, 0).toFixed(2)
-                            }}
-                          </td>
-                          <td>
-                            {{
-                              convert(
-                                day.items
-                                  .reduce((sum, i) => sum + i.unitprice * i.quantity, 0)
-                                  .toFixed(2),
-                              )
-                            }}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+              <q-card v-for="day in dailyTallies" :key="day.date" flat bordered class="q-mb-md">
+                <q-card-section class="text-bold">
+                  {{ formatDateTime(day.date) }}
                 </q-card-section>
+
+                <q-table
+                  :rows="day.items"
+                  :columns="tallyColumns"
+                  row-key="productcode"
+                  dense
+                  flat
+                  separator="horizontal"
+                >
+                  <!-- Quantity highlight -->
+                  <template #body-cell-quantity="props">
+                    <q-td :props="props" class="text-blue-9 text-bold">
+                      {{ props.value }}
+                    </q-td>
+                  </template>
+
+                  <!-- Amount -->
+                  <template #body-cell-amount="props">
+                    <q-td :props="props">
+                      {{ convert((props.row.unitprice * props.row.quantity).toFixed(2)) }}
+                    </q-td>
+                  </template>
+
+                  <!-- Footer totals -->
+                  <template #bottom>
+                    <div class="row justify-end text-bold q-pa-sm bg-grey-3 full-width">
+                      <div class="q-mr-md">
+                        Products:
+                        {{ day.items.reduce((s, i) => s + i.quantity, 0) }}
+                      </div>
+                      <div class="q-mr-md">
+                        BV:
+                        {{ day.items.reduce((s, i) => s + i.bvs * i.quantity, 0).toFixed(2) }}
+                      </div>
+                      <div>
+                        Total:
+                        {{
+                          convert(
+                            day.items.reduce((s, i) => s + i.unitprice * i.quantity, 0).toFixed(2),
+                          )
+                        }}
+                      </div>
+                    </div>
+                  </template>
+                </q-table>
               </q-card>
             </div>
 
@@ -706,76 +679,60 @@
                     {{ monthItem.month }}
                   </div>
 
-                  <div class="table-responsive">
-                    <table class="q-table q-mb-sm" style="width: 100%">
-                      <thead>
-                        <tr class="bg-grey-2 text-bold">
-                          <th>{{ $t('Productcode') }}</th>
-                          <th>{{ $t('ProductName') }}</th>
-                          <th>{{ $t('Quantity') }}</th>
-                          <th>{{ $t('DistributorPrice') }}</th>
-                          <th>BV</th>
-                          <th>{{ $t('Amount') }}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="item in monthItem.items"
-                          :key="item.productcode"
-                          class="hover:bg-grey-1"
-                        >
-                          <td>{{ item.productcode }}</td>
-                          <td>{{ item.productname }}</td>
-                          <td class="text-center">
-                            <q-badge
-                              color="light-green-14 text-black text-bold"
-                              class="flex items-center justify-center text-bold"
-                              style="
-                                font-size: 13px;
-                                min-width: 40px;
-                                height: 28px;
-                                border-radius: 8px;
-                              "
-                            >
-                              {{ item.totalQuantity }}
-                            </q-badge>
-                          </td>
-                          <td>{{ convert((item.unitprice || 0).toFixed(0)) }}</td>
-                          <td>{{ item.totalBvs.toFixed(2) }}</td>
+                  <q-table
+                    :rows="monthItem.items"
+                    :columns="monthlyColumns"
+                    row-key="productcode"
+                    dense
+                    flat
+                    separator="horizontal"
+                    v-model:pagination="monthPagination"
+                    :rows-per-page-options="[5, 10, 15, 0]"
+                    :pagination="monthPagination"
+                  >
+                    <!-- Quantity -->
+                    <template #body-cell-totalQuantity="props">
+                      <q-td :props="props" align="right" class="text-blue-9 text-bold">
+                        {{ props.value }}
+                      </q-td>
+                    </template>
 
-                          <td>{{ convert(item.totalAmount.toFixed(2)) }}</td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr class="bg-grey-3 text-bold">
-                          <td colspan="4" class="text-right">Month Totals:</td>
-                          <td>{{ monthItem.quantityTotal }}</td>
-                          <td>{{ convert(monthItem.amountTotal.toFixed(0)) }}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </q-card-section>
-              </q-card>
+                    <!-- Distributor Price -->
+                    <template #body-cell-unitprice="props">
+                      <q-td :props="props" align="right">
+                        {{ convert(props.value.toFixed(2)) }}
+                      </q-td>
+                    </template>
 
-              <!-- Grand Totals across all months -->
-              <q-card flat bordered class="q-mt-md bg-grey-2">
-                <q-card-section>
-                  <div class="text-right text-bold">
-                    <span class="q-mr-md">Grand Quantity:</span>
-                    <q-badge color="green" class="q-pa-xs text-bold">
-                      {{ monthlyTallies.reduce((sum, m) => sum + m.quantityTotal, 0) }}
-                    </q-badge>
+                    <!-- BV -->
+                    <template #body-cell-totalBvs="props">
+                      <q-td :props="props" align="right">
+                        {{ props.value.toFixed(2) }}
+                      </q-td>
+                    </template>
 
-                    <span class="q-ml-md q-mr-md">Grand Amount:</span>
-                    <span class="text-primary">
-                      {{
-                        convert(
-                          monthlyTallies.reduce((sum, m) => sum + m.amountTotal, 0).toFixed(2),
-                        )
-                      }}
-                    </span>
-                  </div>
+                    <!-- Amount -->
+                    <template #body-cell-totalAmount="props">
+                      <q-td :props="props" align="right">
+                        {{ convert(props.value.toFixed(2)) }}
+                      </q-td>
+                    </template>
+
+                    <!-- Footer Totals -->
+                    <template #bottom>
+                      <q-tr>
+                        <q-td colspan="2" class="text-right text-bold">Totals:</q-td>
+                        <q-td class="text-right text-bold">{{ monthItem.quantityTotal }}</q-td>
+                        <q-td class="text-right text-bold">-</q-td>
+                        <q-td class="text-right text-bold">{{
+                          monthItem.bvsTotal.toFixed(2)
+                        }}</q-td>
+                        <q-td class="text-right text-bold">{{
+                          convert(monthItem.amountTotal.toFixed(2))
+                        }}</q-td>
+                      </q-tr>
+                    </template>
+                  </q-table>
                 </q-card-section>
               </q-card>
             </div>
@@ -1211,6 +1168,81 @@ const dpcOptions = ref([])
 const editDialog = ref(false)
 const editForm = ref({})
 const tallyType = ref('daily') // default daily
+
+// Pagination for monthly table
+const monthPagination = ref({
+  page: 1,
+  rowsPerPage: 5, // default rows per page
+  rowsNumber: 0, // total rows, will set dynamically
+})
+
+// Columns for monthly q-table
+const monthlyColumns = [
+  { name: 'productcode', label: 'Code', field: 'productcode', sortable: true, align: 'left' },
+  { name: 'productname', label: 'Product', field: 'productname', sortable: true, align: 'left' },
+  {
+    name: 'totalQuantity',
+    label: 'Quantity',
+    field: 'totalQuantity',
+    sortable: true,
+    align: 'right',
+  },
+  {
+    name: 'unitprice',
+    label: 'Distributor Price',
+    field: 'unitprice',
+    sortable: true,
+    align: 'right',
+  },
+  { name: 'totalBvs', label: 'BV', field: 'totalBvs', sortable: true, align: 'right' },
+  { name: 'totalAmount', label: 'Amount', field: 'totalAmount', sortable: true, align: 'right' },
+]
+
+// Number formatting helper
+//function convert(val) {
+// return Number(val).toLocaleString()
+//}
+const tallyColumns = [
+  {
+    name: 'productcode',
+    label: $t('Productcode'),
+    field: 'productcode',
+    sortable: true,
+  },
+  {
+    name: 'productname',
+    label: $t('ProductName'),
+    field: 'productname',
+    sortable: true,
+    align: 'left',
+    classes: 'ellipsis-col',
+  },
+  {
+    name: 'quantity',
+    label: $t('Quantity'),
+    field: 'quantity',
+    sortable: true,
+    align: 'right',
+  },
+  {
+    name: 'unitprice',
+    label: $t('DistributorPrice'),
+    field: 'unitprice',
+    align: 'right',
+  },
+  {
+    name: 'bvs',
+    label: 'BV',
+    field: 'bvs',
+    align: 'right',
+  },
+  {
+    name: 'amount',
+    label: $t('Amount'),
+    field: 'amount',
+    align: 'right',
+  },
+]
 
 const fromReceipt = ref('')
 const toReceipt = ref('')
@@ -1771,7 +1803,7 @@ const monthlyTallies = computed(() => {
   const raw = salesStore.salesTally || []
   if (!raw.length) return []
 
-  // Flatten salesdetails
+  // Flatten all salesdetails
   const allItems = raw.flatMap((sale) =>
     (sale.salesdetails || []).map((item) => ({
       ...item,
@@ -1781,44 +1813,42 @@ const monthlyTallies = computed(() => {
     })),
   )
 
-  // Group by month
-  const monthlyGroups = {}
+  // 🔹 Aggregate by productcode ONLY (no month grouping)
+  const productMap = {}
+
   allItems.forEach((item) => {
-    const month = item.salesdate.slice(0, 7) // YYYY-MM
-    if (!monthlyGroups[month]) monthlyGroups[month] = []
-    monthlyGroups[month].push(item)
-  })
+    const code = item.productcode
 
-  // For each month, group by productcode and calculate totals
-  return Object.entries(monthlyGroups).map(([month, items]) => {
-    const products = Object.values(
-      items.reduce((acc, item) => {
-        const code = item.productcode
-        if (!acc[code]) {
-          acc[code] = {
-            productcode: code,
-            productname: item.productname,
-            unitprice: item.unitprice || 0, // ✅ keep one unit price
-            totalQuantity: 0,
-            totalAmount: 0,
-            totalBvs: 0,
-          }
-        }
-        acc[code].totalQuantity += Number(item.quantity || 0)
-        acc[code].totalAmount += (item.unitprice || 0) * (item.quantity || 0)
-        acc[code].totalBvs += (item.bvs || 0) * (item.quantity || 0)
-        return acc
-      }, {}),
-    )
-
-    return {
-      month,
-      items: products,
-      quantityTotal: products.reduce((sum, p) => sum + p.totalQuantity, 0),
-      amountTotal: products.reduce((sum, p) => sum + p.totalAmount, 0),
-      bvsTotal: products.reduce((sum, p) => sum + p.totalBvs, 0),
+    if (!productMap[code]) {
+      productMap[code] = {
+        productcode: code,
+        productname: item.productname,
+        unitprice: item.unitprice || 0,
+        totalQuantity: 0,
+        totalAmount: 0,
+        totalBvs: 0,
+      }
     }
+
+    productMap[code].totalQuantity += Number(item.quantity || 0)
+    productMap[code].totalAmount += (item.unitprice || 0) * (item.quantity || 0)
+    productMap[code].totalBvs += (item.bvs || 0) * (item.quantity || 0)
   })
+
+  const products = Object.values(productMap)
+
+  return [
+    {
+      // Label only (not grouping)
+      month: `${form.startDate} → ${form.endDate}`,
+
+      items: products,
+
+      quantityTotal: products.reduce((s, p) => s + p.totalQuantity, 0),
+      amountTotal: products.reduce((s, p) => s + p.totalAmount, 0),
+      bvsTotal: products.reduce((s, p) => s + p.totalBvs, 0),
+    },
+  ]
 })
 
 const formatDateTime = (dateStr) => {

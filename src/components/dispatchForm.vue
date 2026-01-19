@@ -776,6 +776,7 @@ function getValue(obj, key) {
 function getModifiedBy() {
   return auth.userDetails?.firstname || 'system'
 }
+
 async function handleShopDispatch() {
   if (loading.value) return
   loading.value = true
@@ -788,13 +789,14 @@ async function handleShopDispatch() {
     const qty = Number(dispatchQty.value)
 
     const { error } = await supabase.rpc('transfer_stock', {
-      p_province: province,
-      p_shopcode: shop,
-      p_productcode: product,
-      p_productname: productname,
-      p_quantity: qty,
-      p_modifiedby: getModifiedBy(),
-      p_dispatch_date: dispatchDate.value,
+      p_province: province, // ✅ 1st
+      p_shopcode: shop, // ✅ 2nd
+      p_productcode: product, // ✅ 3rd
+      p_productname: productname, // ✅ 4th
+      p_quantity: qty, // ✅ 5th
+      p_modifiedby: getModifiedBy(), // ✅ 6th
+      p_dispatch_date: dispatchDate.value, // ✅ 7th
+      p_dispatchtype: dispatchType.value, // ✅ 8t
     })
 
     if (error) throw error
@@ -838,12 +840,13 @@ async function handleDPCDispatch() {
     }
 
     const { error } = await supabase.rpc('transfer_store_stock', {
-      p_from_store: fromStore,
-      p_to_store: toStore,
-      p_productcode: productCode,
-      p_quantity: qty,
-      p_modifiedby: getModifiedBy(),
-      p_dispatch_date: dispatchDate.value, // ✅ IMPORTANT
+      p_from_store: fromStore, // must be first
+      p_to_store: toStore, // second
+      p_productcode: productCode, // third
+      p_quantity: qty, // fourth
+      p_modifiedby: getModifiedBy(), // fifth
+      p_dispatch_date: dispatchDate.value, // sixth
+      p_dispatchtype: dispatchType.value, // seventh
     })
 
     if (error) throw error

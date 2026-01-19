@@ -67,6 +67,8 @@
           :columns="filteredColumns"
           row-key="productcode"
           :loading="loading"
+          v-model:sort-by="sortBy"
+          v-model:descending="descending"
         />
       </q-card-section>
 
@@ -100,6 +102,8 @@ const rows = ref([])
 const columns = ref([])
 const allColumns = ref([])
 const visibleColumns = ref([])
+const sortBy = ref('productname')
+const descending = ref(false)
 
 const searchText = ref('')
 
@@ -251,10 +255,30 @@ async function buildStockPivot() {
     locations.forEach((loc, i) => (loc.stockMap = stockMaps[i]))
 
     // Build columns
+
     const baseCols = [
-      { name: 'productcode', label: 'Code', field: 'productcode', align: 'left' },
-      { name: 'productname', label: 'Product Name', field: 'productname', align: 'left' },
-      { name: 'TotalProduct', label: 'Total', field: 'TotalProduct', align: 'right' },
+      {
+        name: 'productcode',
+        label: 'Code',
+        field: 'productcode',
+        align: 'left',
+        sortable: true,
+      },
+      {
+        name: 'productname',
+        label: 'Product Name',
+        field: 'productname',
+        align: 'left',
+        sortable: true,
+      },
+      {
+        name: 'TotalProduct',
+        label: 'Total',
+        field: 'TotalProduct',
+        align: 'right',
+        sortable: true,
+        sort: (a, b) => Number(a) - Number(b), // numeric sort
+      },
     ]
 
     const locCols = locations.map((loc, i) => ({

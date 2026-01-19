@@ -1,14 +1,14 @@
 <template>
   <q-page class="q-pa-md">
     <q-card flat class="q-pa-md" style="max-width: 1200px; margin: 0 auto">
-      <!-- FILTER CONTROLS -->
-      <div class="row items-center justify-center">
+      <!-- DISPATCH TYPE -->
+      <div class="row items-center justify-center q-mb-md">
         <q-option-group v-model="dispatchType" :options="dispatchTypes" inline type="radio" />
       </div>
 
+      <!-- FROM / TO SELECTION -->
       <div class="row no-wrap items-stretch q-col-gutter-sm full-width">
         <div class="col">
-          <!-- ADMIN or SUPERADMIN -->
           <q-select
             v-if="isAdminOrSuperAdmin"
             v-model="fromValue"
@@ -24,7 +24,6 @@
             @update:model-value="loadToOptions"
           />
 
-          <!-- NORMAL USER -->
           <q-input
             v-else
             v-model="fromValue"
@@ -37,7 +36,6 @@
         </div>
 
         <div class="col" v-if="isAdminOrSuperAdmin">
-          <!-- TO SELECT ONLY FOR ADMIN/SUPERADMIN -->
           <q-select
             v-model="toValue"
             :options="toOptions"
@@ -53,6 +51,7 @@
         </div>
       </div>
 
+      <!-- DATE FILTERS -->
       <div class="row q-col-gutter-sm q-mt-md">
         <div class="col">
           <q-input
@@ -64,7 +63,6 @@
             class="full-width"
           />
         </div>
-
         <div class="col">
           <q-input
             v-model="endDate"
@@ -77,6 +75,7 @@
         </div>
       </div>
 
+      <!-- ACTION BUTTONS -->
       <div class="row justify-end q-mt-sm q-gutter-sm">
         <q-btn color="primary" label="Fetch Dispatches" @click="fetchDispatches" />
         <q-btn
@@ -97,383 +96,390 @@
         />
       </div>
 
-      <!-- FETCH BUTTON -->
+      <!-- GROUP BY DATE TOGGLE -->
+      <div v-if="dispatchesByDate.length" class="text-center q-mt-lg q-mb-sm">
+        <q-toggle v-model="groupByDate" label="Group by Date" color="primary" dense />
+      </div>
 
-      <!-- DISPATCH HEADER -->
-      <div v-if="groupedDispatches.length" class="text-center q-mt-lg q-mb-sm">
-        <div class="text-h6 text-bold text-primary">
-          Dispatch: {{ groupedDispatches[0].fromName }} → {{ groupedDispatches[0].toName }}
-        </div>
+      <!-- DISPATCH LIST -->
+      <div v-if="dispatchesByDate.length" class="q-mt-md">
+        <div v-for="group in dispatchesByDate" :key="group.date" class="q-mb-lg">
+          <div v-if="group.date" class="text-uppercase text-bold text-primary q-mb-sm">
+            {{ group.date }}
+          </div>
 
-        <!-- From/To Dates -->
-        <div class="text-subtitle2 text-grey-7 q-mt-xs">
-          From: <span class="text-bold">{{ startDate }}</span> &nbsp; | &nbsp; To:
-          <span class="text-bold">{{ endDate }}</span>
+          <q-separator class="q-mb-sm" />
+
+          <q-list bordered padding class="bg-grey-1">
+            <q-item v-for="row in group.rows" :key="row.id">
+              <q-item-section>
+                <div class="text-subtitle2 text-bold">
+                  {{ row.productcode }} - {{ row.productname }}
+                </div>
+                <div class="row items-center q-gutter-sm">
+                  <!-- Quantity Avatar -->
+                  <q-avatar size="25px" class="bg-black text-white flex flex-center">
+                    <span
+                      class="text-caption font-bold"
+                      style="
+                        line-height: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                      "
+                    >
+                      {{ row.quantity }}
+                    </span>
+                  </q-avatar>
+
+                  <!-- Other details -->
+                  <div class="text-caption">
+                    DP: {{ row.distributorprice.toLocaleString() }} | Value:
+                    {{ row.totalValue.toLocaleString() }}
+                  </div>
+                </div>
+
+                <div class="text-caption">
+                  From: {{ row.fromName }} → To: {{ row.toName }} | By: {{ row.createdby }} | Type:
+                  {{ row.dispatchtype }}
+                </div>
+              </q-item-section>
+              <q-item-section side top>
+                <q-btn
+                  dense
+                  color="negative"
+                  icon="undo"
+                  label="Return"
+                  size="sm"
+                  :disable="loading"
+                  @click="confirmReturn(row)"
+                />
+              </q-item-section>
+            </q-item>
+          </q-list>
         </div>
       </div>
 
-      <!-- TABLE -->
-      <q-table
-        v-if="groupedDispatches.length"
-        :rows="groupedDispatches"
-        :columns="columns"
-        row-key="productcode"
-        flat
-        dense
-        class="q-mt-md"
-      />
       <div v-else class="text-center q-mt-md text-grey">No dispatch records found.</div>
     </q-card>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { supabase } from 'boot/supabase'
 import { useAuth } from 'stores/auth'
 import { useQuasar } from 'quasar'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+
 const auth = useAuth()
 const $q = useQuasar()
-import * as XLSX from 'xlsx'
-//import { saveAs } from 'file-saver'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable' // ✅ default import
 
-//const auth = useAuth()
 // STATE
-const dispatchType = ref('P2S') // P2P: Province → Province, P2S: Province → Shop
+const dispatchType = ref('P2S')
+const groupByDate = ref(true)
 const fromOptions = ref([])
 const toOptions = ref([])
 const fromValue = ref(null)
 const toValue = ref(null)
 const startDate = ref(null)
 const endDate = ref(null)
-const productsMap = ref({}) // { productcode: { productname, distributorprice } }
-const dispatchTypes = computed(() => {
-  return isAdminOrSuperAdmin.value
-    ? [
-        { label: 'Province → Shop', value: 'P2S' },
-        { label: 'Province → Province', value: 'P2P' },
-      ]
-    : [
-        { label: 'Shop Dispatches', value: 'SHOP' }, // just for display
-      ]
-})
+const dispatches = ref([])
+const productsMap = ref({})
+const loading = ref(false)
 
-// --- ROLE COMPUTATIONS ---
 const isAdmin = computed(() => auth.userDetails?.role === 'Admin')
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
 const isAdminOrSuperAdmin = computed(() => isAdmin.value || isSuperAdmin.value)
 
-// --- DATA ---
-const dispatches = ref([])
-const columns = [
-  {
-    name: 'date',
-    label: 'Dispatch Date',
-    field: 'date',
-    align: 'left',
-    format: (val) => (val ? val.split('T')[0] : ''), // show only date
-  },
-  {
-    name: 'productcode',
-    label: 'Product Code',
-    field: 'productcode',
-    align: 'left',
-  },
-  {
-    name: 'productname',
-    label: 'Product Name',
-    field: 'productname',
-    align: 'left',
-  },
-  {
-    name: 'distributorprice',
-    label: 'DP',
-    field: 'distributorprice',
-    align: 'right',
-    format: (v) => Number(v).toLocaleString(),
-  },
-  {
-    name: 'quantity',
-    label: 'Qty',
-    field: 'quantity',
-    align: 'right',
-  },
-  {
-    name: 'totalValue',
-    label: 'Value',
-    field: (row) => row.distributorprice * row.quantity, // compute Value = DP * Qty
-    align: 'right',
-    format: (v) => Number(v).toLocaleString(),
-  },
-  {
-    name: 'dispatchedby',
-    label: 'Dispatched By',
-    field: 'dispatchedby',
-    align: 'left',
-  },
-]
+const dispatchTypes = computed(() =>
+  isAdminOrSuperAdmin.value
+    ? [
+        { label: 'Province → Shop', value: 'P2S' },
+        { label: 'Province → Province', value: 'P2P' },
+      ]
+    : [{ label: 'Shop Dispatches', value: 'SHOP' }],
+)
 
-async function fetchProvinces() {
-  if (!auth.userDetails?.country_code) return
-
-  const { data, error } = await supabase
-    .from('province')
-    .select('name, province_code')
-    .eq('country_code', auth.userDetails.country_code)
-
-  if (!error) {
-    fromOptions.value = data.map((p) => ({
-      label: p.name,
-      value: p.province_code,
-    }))
-  }
-}
-async function fetchShops(province_code) {
-  console.log('🔵 fetchShops() province_code =', province_code)
-  console.log('🔵 type =', typeof province_code)
-
-  const { data, error } = await supabase
-    .from('shops')
-    .select('shop_name, shopcode, province_code')
-    .eq('province_code', province_code)
-
-  if (error) {
-    console.error('❌ Error fetching shops:', error.message)
-    return
-  }
-
-  console.log('🟩 Shops returned from Supabase =', data)
-
-  toOptions.value = data.map((shop) => ({
-    label: shop.shop_name,
-    value: shop.shopcode,
-  }))
-}
-
+// --- FETCH PRODUCTS ---
 async function fetchProducts() {
   const { data, error } = await supabase
     .from('products')
     .select('productcode, productname, distributorprice')
-
-  if (error) {
-    console.error('❌ Error fetching products:', error.message)
-    return
-  }
-
-  productsMap.value = data.reduce((acc, p) => {
-    acc[p.productcode] = { productname: p.productname, distributorprice: p.distributorprice }
-    return acc
-  }, {})
+  if (!error) productsMap.value = data.reduce((acc, p) => ({ ...acc, [p.productcode]: p }), {})
 }
 
-watch(
-  () => fromValue.value,
-  (newVal) => {
-    console.log('🟠 WATCH: fromValue changed →', newVal)
-    console.log('🟠 type =', typeof newVal)
-  },
-)
+// --- FETCH PROVINCES & SHOPS ---
+async function fetchProvinces() {
+  const { data } = await supabase
+    .from('province')
+    .select('name, province_code')
+    .eq('country_code', auth.userDetails?.country_code)
+  fromOptions.value = data.map((p) => ({ label: p.name, value: p.province_code }))
+}
+
+async function fetchShops(province_code) {
+  const { data } = await supabase
+    .from('shops')
+    .select('shop_name, shopcode')
+    .eq('province_code', province_code)
+  toOptions.value = data.map((s) => ({ label: s.shop_name, value: s.shopcode }))
+}
+
+function resolveToLocation() {
+  if (dispatchType.value === 'P2S') {
+    return `${toValue.value}_STOCK`
+  }
+  return toValue.value
+}
+function resolveReturnToTable(row) {
+  if (dispatchType.value === 'SHOP') {
+    return `${row.from_location}_STOCK`
+  }
+  return row.from_location
+}
 
 async function loadToOptions() {
-  console.log('🟡 loadToOptions → fromValue =', fromValue.value)
-
   if (!fromValue.value) return
 
   if (dispatchType.value === 'P2P') {
+    // Province → Province
     toOptions.value = fromOptions.value.filter((p) => p.value !== fromValue.value)
   }
 
   if (dispatchType.value === 'P2S') {
-    console.log('🟣 Calling fetchShops with:', fromValue.value)
+    // Province → Shop
     await fetchShops(fromValue.value)
   }
+}
+
+async function fetchDispatches() {
+  if (!fromValue.value || !toValue.value) {
+    $q.notify({ type: 'negative', message: 'Select FROM and TO locations.' })
+    return
+  }
+
+  if (!startDate.value || !endDate.value) {
+    $q.notify({ type: 'negative', message: 'Select start and end dates.' })
+    return
+  }
+
+  // 🔎 LOG EXACT VALUES BEING SENT
+  console.log('📤 FETCH DISPATCHES PARAMS')
+  console.log('FROM:', fromValue.value)
+  console.log('TO:', toValue.value)
+  console.log('START DATE:', startDate.value)
+  console.log('END DATE:', endDate.value)
+
+  loading.value = true
+  try {
+    const { data, error } = await supabase.rpc('fetch_dispatches_by_location_and_date', {
+      p_from_location: fromValue.value,
+      p_to_location: resolveToLocation(),
+      p_start_date: startDate.value,
+      p_end_date: endDate.value,
+    })
+
+    if (error) throw error
+
+    //console.log('📥 RAW DISPATCHES RETURNED:', data)
+
+    dispatches.value = data.map((d) => {
+      const product = productsMap.value[d.productcode] || {}
+
+      return {
+        ...d,
+        productname: product.productname || d.productcode,
+        distributorprice: Number(product.distributorprice) || 0,
+        totalValue: (Number(product.distributorprice) || 0) * Number(d.quantity || 0),
+        fromName:
+          fromOptions.value.find((p) => p.value === d.from_location)?.label || d.from_location,
+        toName: toOptions.value.find((p) => p.value === d.to_location)?.label || d.to_location,
+      }
+    })
+
+    if (!dispatches.value.length) {
+      $q.notify({ type: 'info', message: 'No dispatches found.' })
+    }
+  } catch (err) {
+    console.error('❌ fetchDispatches error:', err)
+    $q.notify({
+      type: 'negative',
+      message: err.message || 'Failed to fetch dispatches.',
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+// --- GROUP BY DATE ---
+const dispatchesByDate = computed(() => {
+  const map = {}
+
+  dispatches.value.forEach((d) => {
+    // ✅ use DB date, no JS Date()
+    const dateKey = d.datecreated.split('T')[0]
+
+    if (!map[dateKey]) map[dateKey] = []
+    map[dateKey].push(d)
+  })
+
+  return Object.keys(map)
+    .sort() // ascending like your SQL
+    .map((date) => ({
+      date,
+      rows: map[date],
+    }))
+})
+
+// --- RETURN PROCESS ---
+async function processReturn(row) {
+  const notify = $q.notify({
+    message: `Processing return of ${row.quantity} × ${row.productname}...`,
+    color: 'info',
+    timeout: 0,
+    spinner: true,
+  })
+
+  try {
+    const toTable = resolveReturnToTable(row)
+
+    const { error } = await supabase.rpc('return_dispatch', {
+      p_dispatch_id: row.id,
+      p_from_table: row.to_location, // where stock currently is
+      p_to_table: toTable, // resolved correctly
+      p_productcode: row.productcode,
+      p_quantity: Number(row.quantity),
+      p_createdby: `${auth.userDetails.firstname} ${auth.userDetails.lastname}`,
+    })
+
+    if (error) throw error
+
+    // RPC already deletes dispatch → just remove locally
+    dispatches.value = dispatches.value.filter((d) => d.id !== row.id)
+
+    $q.notify({ message: 'Return successful.', color: 'positive' })
+  } catch (err) {
+    console.error(err)
+    $q.notify({ message: err.message || 'Return failed', color: 'negative' })
+  } finally {
+    notify.dismiss && notify.dismiss()
+  }
+}
+
+function confirmReturn(row) {
+  $q.dialog({
+    title: 'Confirm Return',
+    message: `Return <b>${row.quantity}</b> of <b>${row.productname}</b> from <b>${row.toName}</b> to <b>${row.fromName}</b>?`,
+    html: true,
+    cancel: true,
+    persistent: true,
+  }).onOk(() => processReturn(row))
 }
 
 // --- ON MOUNT ---
 onMounted(async () => {
   await fetchProvinces()
-
   await fetchProducts()
   if (!isAdminOrSuperAdmin.value) {
     fromValue.value = auth.userDetails?.dpc_id
-    // TO becomes shops inside user's province
     await fetchShops(auth.userDetails?.province_code)
   }
 })
 
-async function fetchDispatches() {
-  try {
-    console.log('🚀 START fetchDispatches()')
+function exportToExcel() {
+  if (!dispatchesByDate.value.length) return
 
-    if (!startDate.value || !endDate.value) {
-      $q.notify({ type: 'negative', message: 'Please select both start and end dates.' })
-      return
-    }
+  const sheetData = []
 
-    let query = supabase
-      .from('dispatches')
-      .select('*')
-      .gte('datecreated', startDate.value + ' 00:00:00')
-      .lte('datecreated', endDate.value + ' 23:59:59')
+  // 🔹 Header
+  sheetData.push([
+    `From: ${dispatchesByDate.value[0].rows[0].fromName} → ${dispatchesByDate.value[0].rows[0].toName}`,
+  ])
+  sheetData.push([`Start Date: ${startDate.value} | End Date: ${endDate.value}`])
+  sheetData.push([`Printed On: ${new Date().toLocaleString()}`])
+  sheetData.push([])
 
-    if (isAdminOrSuperAdmin.value) {
-      // ✅ Admins must select FROM and TO
-      if (!fromValue.value || !toValue.value) {
-        $q.notify({ type: 'negative', message: 'Please select both FROM and TO locations.' })
-        return
-      }
-      query = query.eq('from_location', fromValue.value).eq('to_location', toValue.value)
-    } else {
-      // ✅ Normal users: only TO = their DPC
-      query = query.eq('to_location', auth.userDetails?.dpc_id)
-    }
+  // 🔹 Table content grouped by date
+  dispatchesByDate.value.forEach((group) => {
+    sheetData.push([group.date.toUpperCase()]) // Date header
 
-    const { data, error } = await query
+    // Table headers
+    sheetData.push(['Product Code', 'Product Name', 'DP', 'Qty', 'Value', 'Dispatched By', 'Type'])
 
-    console.log('📥 RAW SUPABASE RESPONSE:')
-    console.log('   🔹 data =', data)
-    console.log('   🔹 error =', error)
+    group.rows.forEach((row) => {
+      sheetData.push([
+        row.productcode,
+        row.productname,
+        row.distributorprice,
+        row.quantity,
+        row.distributorprice * row.quantity,
+        row.createdby,
+        row.dispatchtype,
+      ])
+    })
 
-    if (error) throw error
-
-    dispatches.value = data || []
-    console.log('🟢 Table updated → dispatches =', dispatches.value)
-  } catch (err) {
-    console.error('🔥 fetchDispatches() failed:', err)
-    $q.notify({ type: 'negative', message: err.message })
-  }
-}
-
-const groupedDispatches = computed(() => {
-  const groups = {}
-
-  dispatches.value.forEach((d) => {
-    const dateKey = d.datecreated.split('T')[0]
-
-    const key = `${d.productcode}_${dateKey}`
-
-    if (!groups[key]) {
-      const fromName =
-        fromOptions.value.find((p) => p.value === d.from_location)?.label || d.from_location
-
-      const toName = toOptions.value.find((p) => p.value === d.to_location)?.label || d.to_location
-
-      const product = productsMap.value[d.productcode] || {}
-
-      groups[key] = {
-        date: dateKey,
-        productcode: d.productcode,
-        productname: product.productname || d.productcode,
-
-        // ⭐ ALWAYS convert to number to avoid NaN
-        distributorprice: Number(product.distributorprice) || 0,
-
-        quantity: 0,
-
-        fromName,
-        toName,
-
-        dispatchedby: d.createdby,
-      }
-    }
-
-    // ⭐ Convert quantity to number too
-    groups[key].quantity += Number(d.quantity) || 0
+    sheetData.push([]) // separator between date groups
   })
 
-  return Object.values(groups).map((g) => ({
-    ...g,
-    totalValue: g.quantity * g.distributorprice,
-  }))
-})
-
-function exportToExcel() {
-  if (!groupedDispatches.value.length) return
-
-  const ws = XLSX.utils.json_to_sheet(
-    groupedDispatches.value.map((row) => ({
-      'Dispatch Date': row.date,
-      'Product Code': row.productcode,
-      'Product Name': row.productname,
-      Quantity: row.quantity,
-      Value: row.distributorprice * row.quantity,
-      'Dispatched By': row.dispatchedby,
-    })),
+  // 🔹 Footer
+  sheetData.push(
+    [],
+    ['Dispatched By:', '', '', 'Signature:'],
+    ['Received By:', '', '', 'Signature:'],
   )
 
+  const ws = XLSX.utils.aoa_to_sheet(sheetData)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Dispatch Report')
-
-  const header = [
-    [`From: ${groupedDispatches.value[0].fromName} → To: ${groupedDispatches.value[0].toName}`],
-    [`Start Date: ${startDate.value} | End Date: ${endDate.value}`],
-    [`Printed On: ${new Date().toLocaleString()}`],
-    [], // empty row before table
-  ]
-
-  XLSX.utils.sheet_add_aoa(ws, header, { origin: 'A1' })
-
-  // Footer after data
-  const footerRow = groupedDispatches.value.length + header.length + 2
-  XLSX.utils.sheet_add_aoa(
-    ws,
-    [
-      ['Dispatched By:', '', '', 'Signature:'],
-      ['Received By:', '', '', 'Signature:'],
-    ],
-    { origin: `A${footerRow}` },
-  )
-
   XLSX.writeFile(wb, 'DispatchReport.xlsx')
 }
-
 function exportToPDF() {
+  if (!dispatchesByDate.value.length) return
+
   const doc = new jsPDF()
-  const tableColumns = [
-    'Dispatch Date',
-    'Product Code',
-    'Product Name',
-    'DP',
-    'Qty',
-    'Value',
-    'Dispatched By',
-  ]
+  let startY = 20
 
-  const tableRows = groupedDispatches.value.map((row) => [
-    row.date,
-    row.productcode,
-    row.productname,
-    row.distributorprice,
-    row.quantity,
-    row.distributorprice * row.quantity,
-    row.dispatchedby,
-  ])
-
-  // Header
-  const startY = 20
+  // 🔹 Header
   doc.setFontSize(12)
-  doc.setTextColor(0, 0, 0) // black
   doc.text(
-    `From: ${groupedDispatches.value[0].fromName} → To: ${groupedDispatches.value[0].toName}`,
+    `From: ${dispatchesByDate.value[0].rows[0].fromName} → ${dispatchesByDate.value[0].rows[0].toName}`,
     14,
     startY,
   )
   doc.text(`Start Date: ${startDate.value} | End Date: ${endDate.value}`, 14, startY + 6)
   doc.text(`Printed On: ${new Date().toLocaleString()}`, 14, startY + 12)
+  startY += 20
 
-  autoTable(doc, {
-    head: [tableColumns],
-    body: tableRows,
-    startY: startY + 20,
-    theme: 'grid',
+  // 🔹 Grouped rows per date
+  dispatchesByDate.value.forEach((group) => {
+    doc.setFont(undefined, 'bold')
+    doc.text(group.date.toUpperCase(), 14, startY)
+    doc.setFont(undefined, 'normal')
+
+    autoTable(doc, {
+      startY: startY + 4,
+      head: [['Product Code', 'Product Name', 'DP', 'Qty', 'Value', 'Dispatched By', 'Type']],
+      body: group.rows.map((row) => [
+        row.productcode,
+        row.productname,
+        row.distributorprice,
+        row.quantity,
+        row.distributorprice * row.quantity,
+        row.createdby,
+        row.dispatchtype,
+      ]),
+      theme: 'grid',
+    })
+
+    startY = doc.lastAutoTable.finalY + 10
   })
 
-  // Footer
-  const finalY = doc.lastAutoTable.finalY + 10
-  doc.text('Dispatched By: ______________________', 14, finalY)
-  doc.text('Received By: ______________________', 14, finalY + 10)
+  // 🔹 Footer
+  doc.text('Dispatched By: ______________________', 14, startY)
+  doc.text('Received By: ______________________', 14, startY + 10)
 
   doc.save('DispatchReport.pdf')
 }

@@ -223,6 +223,21 @@ async function fetchProvinces() {
   fromOptions.value = provinceOptions.value
 }
 
+function resolveWithdrawFromLocation() {
+  // Shop → Province or SHOP user
+  if (dispatchType.value === 'S2P' || dispatchType.value === 'SHOP') {
+    return `${fromValue.value}_STOCK`
+  }
+
+  // Province → Province
+  return fromValue.value
+}
+
+function resolveWithdrawToLocation() {
+  // Always province (never STOCK)
+  return toValue.value
+}
+
 /* ---------------------------------------------------
    FETCH SHOPS FOR A PROVINCE
 --------------------------------------------------- */
@@ -284,9 +299,13 @@ async function fetchProducts() {
 --------------------------------------------------- */
 const mappedDispatches = computed(() => {
   return dispatches.value.map((d) => {
-    const fromName = fromOptions.value?.find?.((p) => p.value === d.from)?.label || d.from
+    const fromName =
+      fromOptions.value.find((p) => p.value === d.from_location)?.label ||
+      d.from_location.replace('_STOCK', '')
 
-    const toName = toOptions.value?.find?.((p) => p.value === d.to)?.label || d.to
+    const toName =
+      toOptions.value.find((p) => p.value === d.to_location)?.label ||
+      d.to_location.replace('_STOCK', '')
 
     const product = productsMap.value[d.productcode] || {}
     const price = product.distributorprice || 0
@@ -355,30 +374,37 @@ async function fetchDispatches() {
       return
     }
 
-    let query = supabase
-      .from('withdraws')
-      .select('*')
-      .gte('datecreated', startDate.value + ' 00:00:00')
-      .lte('datecreated', endDate.value + ' 23:59:59')
-
-    if (isAdminOrSuperAdmin.value) {
-      if (!fromValue.value || !toValue.value) {
-        $q.notify({ type: 'negative', message: 'Please select both FROM and TO.' })
-        return
-      }
-
-      query = query.eq('from', fromValue.value).eq('to', toValue.value)
-    } else {
-      query = query.eq('to', auth.userDetails?.dpc_id)
+    if (!fromValue.value || !toValue.value) {
+      $q.notify({ type: 'negative', message: 'Please select FROM and TO.' })
+      return
     }
 
-    const { data, error } = await query
+    const fromLoc = resolveWithdrawFromLocation()
+    const toLoc = resolveWithdrawToLocation()
+
+    // 🔎 HARD DEBUG (keep this while testing)
+    console.log('📤 WITHDRAW RPC PARAMS')
+    console.log('Dispatch Type:', dispatchType.value)
+    console.log('FROM (resolved):', fromLoc)
+    console.log('TO:', toLoc)
+    console.log('START:', startDate.value)
+    console.log('END:', endDate.value)
+
+    const { data, error } = await supabase.rpc('fetch_withdraws_report', {
+      p_from_location: fromLoc,
+      p_to_location: toLoc,
+      p_start_date: startDate.value,
+      p_end_date: endDate.value,
+    })
+
     if (error) throw error
+
+    console.log('📥 WITHDRAWS RETURNED:', data)
 
     dispatches.value = data || []
   } catch (err) {
     console.error('🔥 fetchWithdraws failed:', err)
-    $q.notify({ type: 'negative', message: err.message })
+    $q.notify({ type: 'negative', message: err.message || 'Failed to fetch withdraws' })
   }
 }
 </script>
