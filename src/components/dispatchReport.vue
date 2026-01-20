@@ -147,10 +147,10 @@
               <q-item-section side top>
                 <q-btn
                   dense
-                  color="negative"
+                  size="sm"
                   icon="undo"
                   label="Return"
-                  size="sm"
+                  class="bg-grey-3 text-green"
                   :disable="loading"
                   @click="confirmReturn(row)"
                 />
@@ -336,7 +336,7 @@ const dispatchesByDate = computed(() => {
 
 // --- RETURN PROCESS ---
 async function processReturn(row) {
-  const notify = $q.notify({
+  const dismiss = $q.notify({
     message: `Processing return of ${row.quantity} × ${row.productname}...`,
     color: 'info',
     timeout: 0,
@@ -348,8 +348,8 @@ async function processReturn(row) {
 
     const { error } = await supabase.rpc('return_dispatch', {
       p_dispatch_id: row.id,
-      p_from_table: row.to_location, // where stock currently is
-      p_to_table: toTable, // resolved correctly
+      p_from_table: row.to_location,
+      p_to_table: toTable,
       p_productcode: row.productcode,
       p_quantity: Number(row.quantity),
       p_createdby: `${auth.userDetails.firstname} ${auth.userDetails.lastname}`,
@@ -357,26 +357,39 @@ async function processReturn(row) {
 
     if (error) throw error
 
-    // RPC already deletes dispatch → just remove locally
     dispatches.value = dispatches.value.filter((d) => d.id !== row.id)
 
+    dismiss() // ✅ stop spinner immediately
     $q.notify({ message: 'Return successful.', color: 'positive' })
   } catch (err) {
+    dismiss() // ✅ stop spinner on failure
     console.error(err)
-    $q.notify({ message: err.message || 'Return failed', color: 'negative' })
-  } finally {
-    notify.dismiss && notify.dismiss()
+    $q.notify({
+      message: err.message || 'Return failed',
+      color: 'negative',
+    })
   }
 }
 
 function confirmReturn(row) {
+  if (!isSuperAdmin.value) {
+    $q.notify({
+      type: 'warning',
+      message: 'Only Super Admins can perform return operations.',
+      position: 'top',
+    })
+    return
+  }
+
+  // existing confirmation dialog / logic continues here
   $q.dialog({
     title: 'Confirm Return',
-    message: `Return <b>${row.quantity}</b> of <b>${row.productname}</b> from <b>${row.toName}</b> to <b>${row.fromName}</b>?`,
-    html: true,
+    message: `Return ${row.quantity} × ${row.productname}?`,
     cancel: true,
     persistent: true,
-  }).onOk(() => processReturn(row))
+  }).onOk(() => {
+    processReturn(row)
+  })
 }
 
 // --- ON MOUNT ---
