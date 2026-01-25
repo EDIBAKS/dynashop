@@ -16,10 +16,16 @@
     />
 
     <!-- 🧾 EXPORT ACTIONS -->
-    <div class="row q-col-gutter-sm q-mt-sm">
-      <q-btn label="Export PDF" :disable="!nodes.length" @click="exportPDF" />
+    <div class="row justify-center q-mt-md">
+      <q-btn
+        label="Export PDF"
+        :disable="!nodes.length"
+        color="primary"
+        class="q-mx-sm"
+        @click="exportPDF"
+      />
 
-      <q-btn label="Export Excel" color="accent" @click="exportExcel" />
+      <q-btn label="Export Excel" color="accent" class="q-mx-sm" @click="exportExcel" />
     </div>
 
     <!-- 📦 EVERYTHING INSIDE HERE WILL BE EXPORTED -->
@@ -51,6 +57,9 @@ import DistributorSearch from 'components/DistributorSearch.vue'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import * as XLSX from 'xlsx'
+import { useQuasar } from 'quasar'
+const $q = useQuasar()
+
 const rootId = ref('') // DistributorIDNO (from search)
 const rootName = ref('') // DistributorNames (from search)
 
@@ -62,25 +71,39 @@ const loading = ref(false)
 async function loadRoot() {
   if (!rootId.value) return
 
+  // 🚫 BLOCK if dates not selected
+  if (!startDate.value || !endDate.value) {
+    $q.notify({
+      type: 'warning',
+      position: 'top',
+      message: 'Please select BOTH From and To dates before loading genealogy',
+    })
+    return
+  }
+
   loading.value = true
+  nodes.value = []
 
   const { data, error } = await supabase.rpc('get_direct_children_with_bv', {
     p_root: rootId.value,
-    p_date_from: startDate.value || null,
-    p_date_to: endDate.value || null,
+    p_date_from: startDate.value,
+    p_date_to: endDate.value,
   })
 
   loading.value = false
 
   if (error) {
     console.error(error)
-    nodes.value = []
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load genealogy data',
+    })
     return
   }
 
   const safeData = Array.isArray(data) ? data : []
 
-  // ✅ Only immediate children of selected root
+  // ✅ Only immediate children
   nodes.value = safeData.filter((d) => d.out_parentidno === rootId.value)
 }
 
