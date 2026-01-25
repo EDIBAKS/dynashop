@@ -34,17 +34,27 @@
               <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'StockReport'">
                 <q-item-section>Stock Report</q-item-section>
               </q-item>
+              <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'TotalDispatch'">
+                <q-item-section>Total Dispatch</q-item-section>
+              </q-item>
               <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'SalesReport'">
                 <q-item-section>Sales Report</q-item-section>
               </q-item>
-              <q-item v-if="isSuperAdmin" clickable @click="tab = 'Extraction'">
-                <q-item-section>Data Extract</q-item-section>
-              </q-item>
+
               <q-item clickable @click="tab = 'Debts'">
                 <q-item-section>Debts</q-item-section>
               </q-item>
               <q-item clickable @click="tab = 'Promos'">
                 <q-item-section>Promos</q-item-section>
+              </q-item>
+              <q-item clickable @click="tab = 'gineology'">
+                <q-item-section>Gineology</q-item-section>
+              </q-item>
+              <q-item clickable @click="tab = 'activeLegs'">
+                <q-item-section>Active Legs</q-item-section>
+              </q-item>
+              <q-item v-if="isSuperAdmin" clickable @click="tab = 'Extraction'">
+                <q-item-section>Data Extract</q-item-section>
               </q-item>
             </q-list>
           </q-btn-dropdown>
@@ -129,6 +139,22 @@
               <div class="text-h6">📊 Withdraws</div>
               <WithdrawReport />
             </q-tab-panel>
+            <q-tab-panel name="activeLegs">
+              <div class="text-h6">📊 Distributor Performance</div>
+              <ManagerLegs />
+            </q-tab-panel>
+            <q-tab-panel name="gineology">
+              <div class="text-h6">📊 Distributor Performance</div>
+              <GineologyTree />
+            </q-tab-panel>
+            <q-tab-panel name="Promos">
+              <div class="text-h6">📊 Promotional GiveAway</div>
+              <PromoReturns />
+            </q-tab-panel>
+            <q-tab-panel name="TotalDispatch">
+              <div class="text-h6">📊Consolidated Dispatch</div>
+              <CompactDispatch />
+            </q-tab-panel>
           </q-tab-panels>
         </div>
       </q-card-section>
@@ -150,6 +176,10 @@ import ExxtractionPage from 'src/components/ExxtractionPage.vue'
 import dispatchReport from 'src/components/dispatchReport.vue'
 import WithdrawReport from 'src/components/WithdrawReport.vue'
 import SalesReport from 'src/components/salesReport.vue'
+import ManagerLegs from 'src/components/ManagerLegs.vue'
+import PromoReturns from 'src/components/PromoReturns.vue'
+import CompactDispatch from 'src/components/CompactDispatch.vue'
+import GineologyTree from 'src/components/GineologyTree.vue'
 const auth = useAuth()
 const currentDate = ref('')
 const tab = ref('Dispatch')
