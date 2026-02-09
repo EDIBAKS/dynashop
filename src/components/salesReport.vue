@@ -37,6 +37,7 @@
         row-key="productcode"
         dense
         flat
+        :row-class="getRowClass"
       />
     </q-card>
   </q-page>
@@ -102,6 +103,7 @@ async function fetchSalesReport() {
       label: shop,
       field: shop,
       align: 'right',
+      format: (val, row) => (row.productname === 'TOTAL SALES' ? formatNumber(val) : val),
     })
   })
 
@@ -111,22 +113,36 @@ async function fetchSalesReport() {
 function pivotSalesData(data) {
   const productsMap = {}
   const shopSet = new Set()
+  const shopTotals = {} // 👈 total sales per shop
 
   data.forEach((row) => {
-    shopSet.add(row.shopcode)
+    const shop = row.shopcode
+    const qty = row.total_quantity || 0
+    const price = row.distributorprice || 0
+    const saleValue = qty * price
 
+    shopSet.add(shop)
+
+    // init shop total
+    if (!shopTotals[shop]) {
+      shopTotals[shop] = 0
+    }
+    shopTotals[shop] += saleValue
+
+    // init product row
     if (!productsMap[row.productcode]) {
       productsMap[row.productcode] = {
         productcode: row.productcode,
         productname: row.productname,
-        distributorprice: row.distributorprice,
+        distributorprice: price,
       }
     }
 
-    productsMap[row.productcode][row.shopcode] = row.total_quantity
+    // store quantity (not value) per shop
+    productsMap[row.productcode][shop] = qty
   })
 
-  // Ensure missing shop columns are filled with 0
+  // fill missing shop quantities with 0
   Object.values(productsMap).forEach((product) => {
     shopSet.forEach((shop) => {
       if (product[shop] == null) {
@@ -135,8 +151,19 @@ function pivotSalesData(data) {
     })
   })
 
+  // 👇 TOTAL ROW
+  const totalRow = {
+    productcode: '',
+    productname: 'TOTAL SALES',
+    distributorprice: '',
+  }
+
+  shopSet.forEach((shop) => {
+    totalRow[shop] = shopTotals[shop]
+  })
+
   return {
-    rows: Object.values(productsMap),
+    rows: [...Object.values(productsMap), totalRow],
     shops: Array.from(shopSet),
   }
 }
@@ -148,6 +175,18 @@ function exportToExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Sales Report')
 
   XLSX.writeFile(wb, `DynaShop_Sales_${startDate.value}_to_${endDate.value}.xlsx`)
+}
+
+function getRowClass(row) {
+  if (row.productname === 'TOTAL SALES') {
+    return 'total-row'
+  }
+  return ''
+}
+
+function formatNumber(val) {
+  if (val == null || val === '') return ''
+  return new Intl.NumberFormat().format(val)
 }
 
 function exportToPDF() {
@@ -215,5 +254,16 @@ function exportToPDF() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  .total-row {
+    font-weight: bold;
+    background-color: #f5f5f5; /* optional */
+  }
+
+  .ellipsis-col {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 </style>

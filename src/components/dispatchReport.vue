@@ -35,8 +35,10 @@
           />
         </div>
 
-        <div class="col" v-if="isAdminOrSuperAdmin">
+        <div class="col">
+          <!-- Admin / SuperAdmin -->
           <q-select
+            v-if="isAdminOrSuperAdmin"
             v-model="toValue"
             :options="toOptions"
             option-label="label"
@@ -48,6 +50,9 @@
             outlined
             class="full-width"
           />
+
+          <!-- Normal user -->
+          <q-input v-else v-model="toValue" label="To" dense outlined class="full-width" disable />
         </div>
       </div>
 
@@ -397,7 +402,8 @@ onMounted(async () => {
   await fetchProvinces()
   await fetchProducts()
   if (!isAdminOrSuperAdmin.value) {
-    fromValue.value = auth.userDetails?.dpc_id
+    fromValue.value = auth.userDetails?.province_code
+    toValue.value = auth.userDetails?.dpc_id
     await fetchShops(auth.userDetails?.province_code)
   }
 })
