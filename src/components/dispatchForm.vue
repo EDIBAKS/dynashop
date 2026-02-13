@@ -38,6 +38,7 @@
             dense
             outlined
             class="full-width"
+            @update:model-value="populateSelects(true)"
           />
 
           <!-- IF NORMAL USER -->
@@ -74,7 +75,9 @@
           dense
           outlined
           class="full-width"
+          @update:model-value="onDispatchDateChange"
         />
+
         <!-- Expiry Date -->
         <q-input
           v-model="expiryDate"
@@ -90,7 +93,8 @@
         <DistributorSearch v-model="distributoridno" v-model:name="distributorname" />
       </div>
       <!-- FOR SHOP selection -->
-      <q-input
+      <!--
+       <q-input
         v-if="dispatchType === 'SHOP'"
         :model-value="fromValue?.dpc_id || auth.userDetails?.dpc_id"
         label="From (DPC)"
@@ -98,6 +102,8 @@
         dense
         outlined
       />
+      
+       -->
 
       <!-- Product Select -->
       <div class="q-pa-md">
@@ -249,6 +255,8 @@ const toValue = ref(null)
 const localProvinces = ref([])
 const localShops = ref([])
 const dispatchDate = ref(localStorage.getItem('dispatchDate') || '')
+//let previousDate = '' // last accepted date
+
 const expiryDate = ref('')
 const selectedProduct = ref(null)
 const dispatchQty = ref(1)
@@ -259,7 +267,7 @@ const isAdmin = computed(() => auth.userDetails?.role === 'Admin')
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
 const isUser = computed(() => !isAdmin.value && !isSuperAdmin.value)
 // set default dispatch type based on role
-const dispatchType = ref(isAdmin.value || isSuperAdmin.value ? 'SHOPS' : 'PROMOS')
+const dispatchType = ref(isAdmin.value || isSuperAdmin.value ? 'SHOP' : 'PROMOS')
 const availableStock = ref(0)
 // Reactive reference for stock
 const provinceStock = ref(0)
@@ -348,7 +356,7 @@ function getStockTable() {
   const to = typeof toValue.value === 'object' ? toValue.value : {}
 
   switch (dispatchType.value) {
-    case 'SHOPS':
+    case 'SHOP':
       // DPC → Shop: Deduct from Province (e.g., RCD)
       return from.province_code || auth.userDetails?.province_code || null
 
@@ -436,6 +444,8 @@ async function fetchProvinceStock() {
     provinceStock.value = 0
   }
 }
+
+watch(dispatchType, () => populateSelects(false))
 
 // =======================================================
 // 🟦 Watch for changes to trigger stock lookup
@@ -587,9 +597,44 @@ function filterActiveProducts(val, update) {
     activeProducts.value.filter((p) => p.productname.toLowerCase().includes(val.toLowerCase())),
   )
 }
+
+function onDispatchDateChange(newDate) {
+  if (!newDate) return
+
+  const selected = new Date(newDate)
+  const today = new Date()
+
+  // Compare with CURRENT MONTH & YEAR
+  const isSameMonth =
+    selected.getMonth() === today.getMonth() && selected.getFullYear() === today.getFullYear()
+
+  if (!isSameMonth) {
+    Dialog.create({
+      title: 'Confirm Date Selection',
+      message: 'You are selecting a date outside the current month. Are you sure?',
+      cancel: true,
+      persistent: true,
+    })
+      .onOk(() => {
+        // ✅ Accept new date
+        dispatchDate.value = newDate
+        localStorage.setItem('dispatchDate', newDate)
+      })
+      .onCancel(() => {
+        // 🔁 Revert to current date
+        const current = new Date().toISOString().slice(0, 10)
+        dispatchDate.value = current
+        localStorage.setItem('dispatchDate', current)
+      })
+  } else {
+    // ✅ Same month → accept silently
+    dispatchDate.value = newDate
+    localStorage.setItem('dispatchDate', newDate)
+  }
+}
 let previousDispatchType = dispatchType.value
 const options = [
-  { label: 'SHOPS', value: 'SHOPS' },
+  { label: 'SHOPS', value: 'SHOP' },
   { label: 'DPC', value: 'DPC' },
 
   { label: 'PROMOS', value: 'PROMOS' },
@@ -651,52 +696,77 @@ async function loadShops() {
   else localShops.value = data
 }
 
-function populateSelects() {
+function populateSelects(triggeredByUser = false) {
   const userProvinceCode = auth.userDetails?.province_code
+  const userProvince = localProvinces.value.find((p) => p.province_code === userProvinceCode)
 
+  /* ==============================
+     🚫 ADMIN SHOP PROVINCE GUARD
+  ============================== */
+  if (
+    dispatchType.value === 'SHOP' &&
+    triggeredByUser &&
+    isAdminRestrictedFrom.value &&
+    fromValue.value &&
+    fromValue.value.province_code !== userProvinceCode
+  ) {
+    $q.notify({
+      type: 'warning',
+      message: 'You can only dispatch to shops within your province',
+    })
+
+    // 🔁 revert immediately
+    fromValue.value = userProvince || null
+
+    // 🏪 repopulate correct shops immediately
+    toOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
+    toValue.value = null
+
+    return // ⛔ stop further processing
+  }
+
+  /* =======================
+     DPC
+  ======================= */
   if (dispatchType.value === 'DPC') {
     if (isAdminRestrictedFrom.value) {
-      // 🔒 Admin: FROM locked to own province
-      const province = localProvinces.value.find((p) => p.province_code === userProvinceCode)
+      fromOptions.value = userProvince ? [userProvince] : []
+      fromValue.value = userProvince || null
 
-      fromOptions.value = province ? [province] : []
-      fromValue.value = province || null
-
-      // TO can still be all provinces (except same one, optional)
       toOptions.value = localProvinces.value.filter((p) => p.province_code !== userProvinceCode)
       toValue.value = null
     } else {
-      // 🟢 SuperAdmin
       fromOptions.value = localProvinces.value
       toOptions.value = localProvinces.value
       fromValue.value = null
       toValue.value = null
     }
-  } else if (dispatchType.value === 'SHOPS') {
+  } else if (dispatchType.value === 'SHOP') {
+    /* =======================
+     SHOP
+  ======================= */
     if (isAdminRestrictedFrom.value) {
-      // 🔒 Admin: FROM locked to own province
-      const province = localProvinces.value.find((p) => p.province_code === userProvinceCode)
+      fromOptions.value = userProvince ? [userProvince] : []
+      fromValue.value = userProvince || null
 
-      fromOptions.value = province ? [province] : []
-      fromValue.value = province || null
-
-      // TO → shops in same province
       toOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
       toValue.value = null
     } else {
-      // 🟢 SuperAdmin
       fromOptions.value = localProvinces.value
-      toOptions.value = localShops.value
-      fromValue.value = null
+
+      toOptions.value = fromValue.value
+        ? localShops.value.filter((s) => s.province_code === fromValue.value.province_code)
+        : []
+
       toValue.value = null
     }
   } else if (['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType.value)) {
-    if (isSuperAdmin.value) {
-      fromOptions.value = localShops.value
-    } else {
-      // Admin → only shops in his province
-      fromOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
-    }
+    /* =======================
+     PROMOS / EXPIRY / DEBTS
+  ======================= */
+    fromOptions.value = isSuperAdmin.value
+      ? localShops.value
+      : localShops.value.filter((s) => s.province_code === userProvinceCode)
 
     fromValue.value = null
     toOptions.value = []
@@ -751,6 +821,14 @@ onMounted(async () => {
   await loadShops()
   populateSelects()
   getModifiedBy()
+
+  // If nothing stored, default to today
+  if (!dispatchDate.value) {
+    dispatchDate.value = new Date().toISOString().slice(0, 10)
+  }
+
+  // Baseline = last accepted date (stored or today)
+  //previousDate = dispatchDate.value
 
   if (isUser.value) {
     // Automatically assign the user’s DPC/shop/province for later stock operations
@@ -1032,7 +1110,7 @@ async function submitDispatch() {
     if (!dispatchType.value) throw new Error('Please select a dispatch type.')
 
     switch (dispatchType.value) {
-      case 'SHOPS':
+      case 'SHOP':
         await handleShopDispatch()
         break
 

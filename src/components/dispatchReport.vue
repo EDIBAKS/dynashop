@@ -116,51 +116,48 @@
           <q-separator class="q-mb-sm" />
 
           <q-list bordered padding class="bg-grey-1">
-            <q-item v-for="row in group.rows" :key="row.id">
-              <q-item-section>
-                <div class="text-subtitle2 text-bold">
-                  {{ row.productcode }} - {{ row.productname }}
-                </div>
-                <div class="row items-center q-gutter-sm">
-                  <!-- Quantity Avatar -->
-                  <q-avatar size="25px" class="bg-black text-white flex flex-center">
-                    <span
-                      class="text-caption font-bold"
-                      style="
-                        line-height: 1;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                      "
-                    >
-                      {{ row.quantity }}
-                    </span>
-                  </q-avatar>
-
-                  <!-- Other details -->
-                  <div class="text-caption">
-                    DP: {{ row.distributorprice.toLocaleString() }} | Value:
-                    {{ row.totalValue.toLocaleString() }}
+            <template v-for="row in group.rows" :key="row.id">
+              <q-item>
+                <q-item-section>
+                  <div class="text-subtitle2 text-bold">
+                    {{ row.productcode }} - {{ row.productname }}
                   </div>
-                </div>
 
-                <div class="text-caption">
-                  From: {{ row.fromName }} → To: {{ row.toName }} | By: {{ row.createdby }} | Type:
-                  {{ row.dispatchtype }}
-                </div>
-              </q-item-section>
-              <q-item-section side top>
-                <q-btn
-                  dense
-                  size="sm"
-                  icon="undo"
-                  label="Return"
-                  class="bg-grey-3 text-green"
-                  :disable="loading"
-                  @click="confirmReturn(row)"
-                />
-              </q-item-section>
-            </q-item>
+                  <div class="row items-center q-gutter-sm">
+                    <q-avatar size="35px" class="bg-black text-white flex flex-center">
+                      <span class="text-caption font-bold">
+                        {{ row.quantity }}
+                      </span>
+                    </q-avatar>
+
+                    <div class="text-caption">
+                      DP: {{ row.distributorprice.toLocaleString() }} | Value:
+                      {{ row.totalValue.toLocaleString() }}
+                    </div>
+                  </div>
+
+                  <div class="text-caption">
+                    From: {{ row.fromName }} → To: {{ row.toName }} | By: {{ row.createdby }} |
+                    Type: {{ row.dispatchtype }}
+                  </div>
+                </q-item-section>
+
+                <q-item-section side top>
+                  <q-btn
+                    dense
+                    size="sm"
+                    icon="undo"
+                    label="Return"
+                    class="bg-grey-3 text-green"
+                    :disable="loading"
+                    @click="confirmReturn(row)"
+                  />
+                </q-item-section>
+              </q-item>
+
+              <!-- Separator after each row -->
+              <q-separator inset />
+            </template>
           </q-list>
         </div>
       </div>
