@@ -93,17 +93,17 @@ async function loadRoot() {
   loading.value = false
 
   if (error) {
-    console.error(error)
+    console.error('RPC error:', error)
     $q.notify({
       type: 'negative',
-      message: 'Failed to load genealogy data',
+      message: error.message || 'Failed to load genealogy data',
     })
     return
   }
 
   const safeData = Array.isArray(data) ? data : []
 
-  // ✅ Only immediate children
+  // ✅ Only immediate children (extra safety)
   nodes.value = safeData.filter((d) => d.out_parentidno === rootId.value)
 }
 

@@ -28,13 +28,13 @@
 
         <!-- RIGHT COLUMN: PBV + GBV -->
         <div class="col-6 col-sm-4 text-right text-caption">
-          <div class="text-primary">PBV: {{ node.personal_bv }}</div>
+          <div class="text-primary text-bold">PBV: {{ node.personal_bv }}</div>
 
           <!-- GBV below PBV (mobile only) -->
-          <div class="text-positive lt-sm">GBV: {{ gbv }}</div>
+          <div class="text-positive lt-sm text-bold">GBV: {{ gbv }}</div>
 
           <!-- GBV inline (desktop only) -->
-          <span class="q-ml-xs text-positive gt-xs"> GBV: {{ gbv }} </span>
+          <span class="q-ml-xs text-positive gt-xs text-bold"> GBV: {{ gbv }} </span>
         </div>
       </div>
     </template>

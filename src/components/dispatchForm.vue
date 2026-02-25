@@ -761,14 +761,14 @@ function populateSelects(triggeredByUser = false) {
       toValue.value = null
     }
   } else if (['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType.value)) {
-    /* =======================
-     PROMOS / EXPIRY / DEBTS
-  ======================= */
     fromOptions.value = isSuperAdmin.value
       ? localShops.value
       : localShops.value.filter((s) => s.province_code === userProvinceCode)
 
-    fromValue.value = null
+    if (!triggeredByUser) {
+      fromValue.value = null
+    }
+
     toOptions.value = []
     toValue.value = null
   }

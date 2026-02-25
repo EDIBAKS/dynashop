@@ -82,12 +82,12 @@
 
       <!-- ACTION BUTTONS -->
       <div class="row justify-end q-mt-sm q-gutter-sm">
-        <q-btn color="primary" label="Fetch Dispatches" @click="fetchDispatches" />
+        <q-btn color="light-green-14" label="Fetch Dispatches" @click="fetchDispatches" />
         <q-btn
           dense
           flat
           icon="table_view"
-          color="green"
+          color="light-green-14"
           @click="exportToExcel"
           title="Export to Excel"
         />
@@ -95,7 +95,7 @@
           dense
           flat
           icon="picture_as_pdf"
-          color="red"
+          color="light-green-14"
           @click="exportToPDF"
           title="Export to PDF"
         />
@@ -142,13 +142,13 @@
                   </div>
                 </q-item-section>
 
-                <q-item-section side top>
+                <q-item-section side top v-if="isAdminOrSuperAdmin">
                   <q-btn
                     dense
                     size="sm"
-                    icon="undo"
-                    label="Return"
-                    class="bg-grey-3 text-green"
+                    icon="replay"
+                    label="Reverse"
+                    class="bg-light-green-14 text-white"
                     :disable="loading"
                     @click="confirmReturn(row)"
                   />
