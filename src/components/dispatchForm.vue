@@ -715,14 +715,10 @@ function populateSelects(triggeredByUser = false) {
       message: 'You can only dispatch to shops within your province',
     })
 
-    // 🔁 revert immediately
     fromValue.value = userProvince || null
-
-    // 🏪 repopulate correct shops immediately
     toOptions.value = localShops.value.filter((s) => s.province_code === userProvinceCode)
     toValue.value = null
-
-    return // ⛔ stop further processing
+    return
   }
 
   /* =======================
@@ -731,20 +727,33 @@ function populateSelects(triggeredByUser = false) {
   if (dispatchType.value === 'DPC') {
     if (isAdminRestrictedFrom.value) {
       fromOptions.value = userProvince ? [userProvince] : []
-      fromValue.value = userProvince || null
+
+      if (!triggeredByUser) {
+        fromValue.value = userProvince || null
+      }
 
       toOptions.value = localProvinces.value.filter((p) => p.province_code !== userProvinceCode)
-      toValue.value = null
+
+      if (!triggeredByUser) {
+        toValue.value = null
+      }
     } else {
       fromOptions.value = localProvinces.value
       toOptions.value = localProvinces.value
-      fromValue.value = null
-      toValue.value = null
+
+      if (!triggeredByUser) {
+        fromValue.value = null
+        toValue.value = null
+      }
     }
-  } else if (dispatchType.value === 'SHOP') {
-    /* =======================
+
+    return
+  }
+
+  /* =======================
      SHOP
   ======================= */
+  if (dispatchType.value === 'SHOP') {
     if (isAdminRestrictedFrom.value) {
       fromOptions.value = userProvince ? [userProvince] : []
       fromValue.value = userProvince || null
@@ -760,7 +769,14 @@ function populateSelects(triggeredByUser = false) {
 
       toValue.value = null
     }
-  } else if (['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType.value)) {
+
+    return
+  }
+
+  /* =======================
+     PROMOS / EXPIRY / DEBTS
+  ======================= */
+  if (['PROMOS', 'EXPIRY', 'DEBTS'].includes(dispatchType.value)) {
     fromOptions.value = isSuperAdmin.value
       ? localShops.value
       : localShops.value.filter((s) => s.province_code === userProvinceCode)
