@@ -95,6 +95,12 @@
         </div>
         <div class="row items-center q-col-gutter-sm q-mt-md" style="width: 100%">
           <div class="col">
+            <div
+              v-if="form.reportType === 'dailySales'"
+              class="text-caption text-bold text-white q-mb-xs"
+            >
+              {{ $t('from') }}
+            </div>
             <q-input
               v-if="form.reportType === 'dailySales'"
               v-model="fromReceipt"
@@ -107,6 +113,12 @@
           </div>
 
           <div class="col">
+            <div
+              v-if="form.reportType === 'dailySales'"
+              class="text-caption text-bold text-white q-mb-xs"
+            >
+              {{ $t('to') }}
+            </div>
             <q-input
               v-if="form.reportType === 'dailySales'"
               v-model="toReceipt"
@@ -221,7 +233,7 @@
             :max="totalPages"
             direction-links
             outline
-            color="orange"
+            color="white"
             active-design="unelevated"
             active-color="brown"
             active-text-color="orange"

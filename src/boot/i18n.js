@@ -115,6 +115,9 @@ const messages = {
     submitSaleConfirm: 'Are you sure you want to submit this sale?',
     select_report_type: 'Select Report Category',
     submitError: 'Error submitting sale: {error}',
+
+    from: 'First receiptNo',
+    to: 'Last receiptNo',
   },
 
   fr: {
@@ -227,6 +230,8 @@ const messages = {
     submitSaleTitle: 'Soumettre la vente',
     submitSaleConfirm: 'Êtes-vous sûr de vouloir soumettre cette vente ?',
     select_report_type: 'Catégorie de rapport',
+    from: 'Code du premier reçu',
+    to: 'Code du dernier reçu',
   },
 }
 

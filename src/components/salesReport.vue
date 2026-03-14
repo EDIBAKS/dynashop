@@ -30,6 +30,27 @@
 
         <q-btn label="Export Excel" color="positive" icon="table_view" @click="exportToExcel" />
       </q-card-section>
+      <!-- Shop Sales Summary -->
+      <div class="row q-col-gutter-md q-mb-md" v-if="shopSummary.length">
+        <div v-for="shop in shopSummary" :key="shop.shop" class="col-12 col-md-4">
+          <q-card flat bordered class="q-pa-md">
+            <div class="text-subtitle1 text-bold">
+              {{ shop.shop }}
+            </div>
+
+            <div class="text-h6 text-primary">${{ formatNumber(shop.total) }}</div>
+
+            <div class="text-caption">{{ shop.percent.toFixed(1) }}% of $15,000 target</div>
+
+            <q-linear-progress
+              :value="shop.percent / 100"
+              size="10px"
+              :color="shop.percent >= 100 ? 'positive' : 'warning'"
+              class="q-mt-sm"
+            />
+          </q-card>
+        </div>
+      </div>
       <q-table
         title="Sales Pivot by Shop"
         :rows="rows"
@@ -60,7 +81,8 @@ const user = auth.userDetails.firstname
 const today = date.formatDate(new Date(), 'YYYY-MM-DD')
 const startDate = ref(today)
 const endDate = ref(today)
-
+const shopSummary = ref([])
+const SALES_TARGET = 15000
 async function fetchSalesReport() {
   loading.value = true
   rows.value = []
@@ -161,6 +183,21 @@ function pivotSalesData(data) {
   shopSet.forEach((shop) => {
     totalRow[shop] = shopTotals[shop]
   })
+
+  const summary = []
+
+  shopSet.forEach((shop) => {
+    const total = shopTotals[shop] || 0
+    const percent = (total / SALES_TARGET) * 100
+
+    summary.push({
+      shop,
+      total,
+      percent,
+    })
+  })
+
+  shopSummary.value = summary
 
   return {
     rows: [...Object.values(productsMap), totalRow],
