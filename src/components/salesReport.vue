@@ -51,6 +51,15 @@
           </q-card>
         </div>
       </div>
+      <div v-if="totalSales" class="q-mb-md">
+        <q-card flat bordered class="q-pa-md bg-grey-1">
+          <div class="row items-center justify-between">
+            <div class="text-subtitle1 text-bold">Total Sales (All Shops)</div>
+
+            <div class="text-h5 text-primary">${{ formatNumber(totalSales) }}</div>
+          </div>
+        </q-card>
+      </div>
       <q-table
         title="Sales Pivot by Shop"
         :rows="rows"
@@ -83,6 +92,7 @@ const startDate = ref(today)
 const endDate = ref(today)
 const shopSummary = ref([])
 const SALES_TARGET = 15000
+const totalSales = ref(0)
 async function fetchSalesReport() {
   loading.value = true
   rows.value = []
@@ -185,10 +195,13 @@ function pivotSalesData(data) {
   })
 
   const summary = []
+  let grandTotal = 0
 
   shopSet.forEach((shop) => {
     const total = shopTotals[shop] || 0
     const percent = (total / SALES_TARGET) * 100
+
+    grandTotal += total
 
     summary.push({
       shop,
@@ -198,6 +211,7 @@ function pivotSalesData(data) {
   })
 
   shopSummary.value = summary
+  totalSales.value = grandTotal
 
   return {
     rows: [...Object.values(productsMap), totalRow],
