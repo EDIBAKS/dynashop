@@ -118,6 +118,12 @@ const messages = {
 
     from: 'First receiptNo',
     to: 'Last receiptNo',
+    pendingReceipts: 'Pending Receipts',
+    noPendingReceipts: 'No Pending Receipts',
+    allCleared: 'All Receipts Cleared',
+
+    markCorrect: 'Mark Correct',
+    setPending: 'Set Pending',
   },
 
   fr: {
@@ -232,6 +238,11 @@ const messages = {
     select_report_type: 'Catégorie de rapport',
     from: 'Code du premier reçu',
     to: 'Code du dernier reçu',
+    pendingReceipts: 'Reçus en attente',
+    noPendingReceipts: 'Aucun reçu en attente',
+    allCleared: 'Tous les reçus sont traités',
+    markCorrect: 'Marquer comme correct',
+    setPending: 'Mettre en attente',
   },
 }
 

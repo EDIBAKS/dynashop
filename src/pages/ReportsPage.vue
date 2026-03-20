@@ -17,7 +17,12 @@
             "
             class="text-white"
           >
-            <div class="text-h6 text-white text-bold">{{ shopName }}</div>
+            <!-- Shop Name -->
+            <div class="text-h6 text-white text-bold">
+              {{ shopName }}
+            </div>
+
+            <!-- Report Title -->
             <div class="text-subtitle1 text-bold q-mt-xs">
               {{
                 form.reportType === 'dailySales'
@@ -28,6 +33,26 @@
                       ? $t('salesPerDay')
                       : ''
               }}
+            </div>
+
+            <!-- 🔥 Pending Receipts Indicator -->
+            <div class="row items-center q-mt-sm q-gutter-sm">
+              <!-- Loader -->
+              <q-spinner v-if="pendingLoading" size="16px" color="orange" />
+
+              <!-- Counter -->
+              <q-chip
+                v-else
+                dense
+                :icon="pendingCount === 0 ? 'check_circle' : 'pending_actions'"
+                :color="pendingCount === 0 ? 'light-green-14' : 'orange-9'"
+                text-color="black"
+                class="text-bold"
+              >
+                {{
+                  pendingCount === 0 ? $t('allCleared') : pendingCount + ' ' + $t('pendingReceipts')
+                }}
+              </q-chip>
             </div>
           </div>
 
@@ -144,7 +169,7 @@
         >
           <div class="text-caption text-bold text-white text-bold q-mb-xs">Shop</div>
           <select
-            v-if="isAdmin"
+            v-if="permissions.canSelectDpc"
             v-model="form.dpccode"
             class="custom-select full-width text-center bg-blue-grey-10"
           >
@@ -152,6 +177,7 @@
               {{ option.label }}
             </option>
           </select>
+
           <q-input
             v-else
             v-model="form.dpccode"
@@ -400,7 +426,8 @@
                         no-caps
                         :color="sale.status === 'pending' ? 'red' : 'green'"
                         :icon="sale.status === 'pending' ? 'check_circle' : 'warning'"
-                        :label="sale.status === 'pending' ? 'Set Complete' : 'Set Pending'"
+                        :label="sale.status === 'pending' ? $t('markCorrect') : $t('setPending')"
+                        :disable="sale.status === 'pending' && !isAdmin"
                         @click="toggleStatus(sale)"
                       />
                     </div>
@@ -1017,7 +1044,7 @@
                         no-caps
                         :color="sale.status === 'pending' ? 'red' : 'green'"
                         :icon="sale.status === 'pending' ? 'check_circle' : 'warning'"
-                        :label="sale.status === 'pending' ? 'Mark Correct' : 'Set Pending'"
+                        :label="sale.status === 'pending' ? $t('markCorrect') : $t('setPending')"
                         :disable="sale.status === 'pending' && !isAdmin"
                         @click="toggleStatus(sale)"
                       />
@@ -1180,6 +1207,33 @@ const dpcOptions = ref([])
 const editDialog = ref(false)
 const editForm = ref({})
 const tallyType = ref('daily') // default daily
+const pendingCount = ref(0)
+const pendingLoading = ref(false)
+
+const fetchPendingCount = async () => {
+  if (!form.dpccode || !form.startDate || !form.endDate) return
+
+  pendingLoading.value = true
+
+  try {
+    const { count, error } = await supabase
+      .from('salesheader')
+      .select('*', { count: 'exact', head: true })
+      .eq('dpccode', form.dpccode)
+      .eq('status', 'pending')
+      .gte('salesdate', form.startDate)
+      .lte('salesdate', form.endDate)
+
+    if (error) throw error
+
+    pendingCount.value = count || 0
+  } catch (err) {
+    console.error('Pending count error:', err.message)
+    pendingCount.value = 0
+  } finally {
+    pendingLoading.value = false
+  }
+}
 
 // Pagination for monthly table
 const monthPagination = ref({
@@ -1398,6 +1452,15 @@ const filteredStock = computed(() => {
   return result.sort((a, b) => a.quantity - b.quantity)
 })
 
+const permissions = computed(() => {
+  const role = auth.userDetails?.role
+
+  return {
+    canSelectDpc: ['Admin', 'SuperAdmin', 'User2'].includes(role),
+    isAdmin: ['Admin', 'SuperAdmin'].includes(role),
+  }
+})
+
 const rowColor = (qty) => {
   if (qty <= 20) return 'row-red'
   if (qty <= 50) return 'row-orange'
@@ -1426,6 +1489,13 @@ watch(
   },
 )
 
+watch(
+  () => [form.dpccode, form.startDate, form.endDate],
+  () => {
+    fetchPendingCount()
+  },
+  { immediate: true },
+)
 // FETCH STOCK ON MOUNTED
 onMounted(async () => {
   const tableName = `${form.dpccode}_STOCK`
@@ -1443,7 +1513,9 @@ onMounted(async () => {
 })
 
 const exchangeRate = computed(() => store.headerData.exchangeRate)
+//const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
+
 // Status color mapping
 const statusColor = (status) => {
   switch (status) {
@@ -1640,7 +1712,7 @@ onMounted(async () => {
         .from('shops')
         .select('shopcode, shop_name, province_code, country_code')
         .order('shop_name'))
-    } else if (role === 'Admin') {
+    } else if (role === 'Admin' || role === 'User2') {
       ;({ data, error } = await supabase
         .from('shops')
         .select('shopcode, shop_name')
@@ -1650,7 +1722,7 @@ onMounted(async () => {
 
     if (error) throw error
 
-    if (role === 'SuperAdmin' || role === 'Admin') {
+    if (role === 'SuperAdmin' || role === 'Admin' || role === 'User2') {
       // Populate dropdown
       dpcOptions.value = (data || []).map((d) => ({
         label: d.shop_name,
@@ -1691,7 +1763,7 @@ const fetchData = async () => {
   }
 
   try {
-    const dpccodeToUse = isAdmin.value ? form.dpccode : auth.userDetails?.dpc_id
+    const dpccodeToUse = permissions.value.canSelectDpc ? form.dpccode : auth.userDetails?.dpc_id
 
     if (!dpccodeToUse) {
       $q.notify({ type: 'negative', message: 'No DPC code available' })
@@ -2106,6 +2178,8 @@ const toggleStatus = (sale) => {
     try {
       const updatedStatus = await salesStore.toggleStatus(sale.receiptno, sale.salesdate, userRole)
       sale.status = updatedStatus
+      // 🔥 update counter instantly
+      fetchPendingCount()
 
       $q.notify({
         type: 'positive',
