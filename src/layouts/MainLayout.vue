@@ -70,7 +70,9 @@
 
     <!-- Page Content -->
     <q-page-container :style="wallpaperStyle">
-      <router-view />
+      <transition name="fade" mode="out-in">
+        <router-view />
+      </transition>
 
       <!-- Floating Buttons (INSIDE page, just below header, left corner) -->
       <!-- Floating Buttons (INSIDE page, just below header, right corner) -->
@@ -204,6 +206,7 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from 'stores/auth'
 import { useRouter } from 'vue-router'
+import { Loading } from 'quasar'
 //const isAdmin = computed(() => ['Admin', 'SuperAdmin'].includes(auth.userDetails?.role))
 const auth = useAuth()
 import { useRoute } from 'vue-router'
@@ -256,21 +259,64 @@ const logout = async () => {
   window.location.href = '/'
 }
 const activeTab = ref('sales')
-const goToSales = () => {
+const goToSales = async () => {
   activeTab.value = 'sales'
-  router.push({ name: 'Home' })
+
+  Loading.show({
+    message: 'Loading...',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  })
+  Loading.show({
+    spinnerColor: 'light-green-14',
+    message: 'Loading...',
+  })
+
+  await router.push({ name: 'Home' })
+
+  setTimeout(() => {
+    Loading.hide()
+  }, 300) // slight delay for smooth feel
 }
-const goToReports = () => {
+const goToReports = async () => {
   activeTab.value = 'reports'
-  router.push({ name: 'reports' })
+
+  Loading.show({
+    message: 'Loading...',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  })
+  Loading.show({
+    spinnerColor: 'light-green-14',
+    message: 'Loading...',
+  })
+
+  try {
+    await router.push({ name: 'reports' })
+  } finally {
+    setTimeout(() => {
+      Loading.hide()
+    }, 300)
+  }
 }
-//const goToStock = () => {
-// activeTab.value = 'stock'
-// router.push({ name: 'stock' })
-//}
-const goToAdmin = () => {
+
+const goToAdmin = async () => {
   activeTab.value = 'admin'
-  router.push({ name: 'admin' })
+
+  Loading.show({
+    message: 'Loading...',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  })
+  Loading.show({
+    spinnerColor: 'light-green-14',
+    message: 'Loading...',
+  })
+
+  try {
+    await router.push({ name: 'admin' })
+  } finally {
+    setTimeout(() => {
+      Loading.hide()
+    }, 300)
+  }
 }
 
 onMounted(async () => {
@@ -356,5 +402,14 @@ onBeforeUnmount(() => {
   .custom-header .ellipsis {
     max-width: 100px; /* shrink allowed width */
   }
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
