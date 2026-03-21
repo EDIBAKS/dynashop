@@ -633,9 +633,13 @@
                 />
                 <!-- Debug raw store data -->
               </q-card-section>
+
               <reportExporter
                 reportType="tallys"
                 :reportData="tallyType === 'daily' ? dailyTallies : monthlyTallies"
+                :dpccode="form.dpccode"
+                :startDate="form.startDate"
+                :endDate="form.endDate"
                 :extraInfo="{ tallyType }"
               />
             </q-card>
@@ -779,7 +783,14 @@
 
           <template v-else-if="form.reportType === 'sales'">
             <q-card flat bordered class="q-mb-md bg-grey-1">
-              <reportExporter reportType="sales" :reportData="dailySalesTotals" />
+              <reportExporter
+                reportType="sales"
+                :reportData="dailySalesTotals"
+                :dpccode="form.dpccode"
+                :startDate="form.startDate"
+                :endDate="form.endDate"
+              />
+
               <!-- Report Header -->
               <q-card-section v-if="reportData && reportData.length > 0" class="q-pa-sm bg-grey-2">
                 <div class="row justify-between items-center">
@@ -835,7 +846,13 @@
           </template>
           <template v-else-if="form.reportType === 'stock'">
             <q-card flat bordered class="q-mb-md bg-grey-1">
-              <reportExporter reportType="stock" :reportData="stock" />
+              <reportExporter
+                reportType="stock"
+                :reportData="stock"
+                :dpccode="form.dpccode"
+                :startDate="form.startDate"
+                :endDate="form.endDate"
+              />
               <!-- Report Header -->
               <q-card-section v-if="reportData && reportData.length > 0" class="q-pa-sm bg-grey-2">
                 <div class="row justify-between items-center">
@@ -874,7 +891,6 @@
                 <q-card-section>
                   <div>
                     <q-table
-                      title="Stock Summary"
                       :rows="filteredStock"
                       :columns="columns2"
                       row-key="productcode"
@@ -885,14 +901,41 @@
                       :pagination="{ rowsPerPage: 0 }"
                       class="stock-table"
                     >
-                      <!-- Quantity cell color logic -->
+                      <!-- 🔥 ENHANCED HEADER (replaces title) -->
+                      <template #top>
+                        <div class="column full-width q-pb-sm">
+                          <!-- Title row -->
+                          <div class="row justify-between items-center">
+                            <div class="text-h6">Stock Summary</div>
+
+                            <div class="text-subtitle2 text-grey-7">
+                              {{ currentDate }}
+                            </div>
+                          </div>
+
+                          <!-- Info row -->
+                          <div class="row justify-between items-center q-mt-xs">
+                            <div class="text-subtitle2 text-primary">
+                              <q-icon name="store" size="16px" class="q-mr-xs" />
+                              {{ shopName }} ({{ form.dpccode }})
+                            </div>
+
+                            <div class="text-subtitle2">
+                              <q-icon name="person" size="16px" class="q-mr-xs" />
+                              {{ auth.userDetails.firstname }}
+                            </div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- ✅ Quantity cell color logic (UNCHANGED) -->
                       <template #body-cell-quantity="props">
                         <q-td :props="props" :class="rowColor(props.row.quantity)">
                           {{ props.row.quantity }}
                         </q-td>
                       </template>
 
-                      <!-- Product name wrap / ellipsis -->
+                      <!-- ✅ Product name wrap (UNCHANGED) -->
                       <template #body-cell-productname="props">
                         <q-td :props="props">
                           <div class="product-wrap">
@@ -901,14 +944,16 @@
                         </q-td>
                       </template>
 
-                      <!-- Footer totals -->
+                      <!-- ✅ Footer totals (UNCHANGED) -->
                       <template #bottom-row>
                         <q-tr>
                           <q-td colspan="3" class="text-right text-bold">Grand Totals:</q-td>
-                          <q-td class="text-bold">{{
-                            convert(stockTotals.totalDpValue.toFixed(2))
-                          }}</q-td>
-                          <q-td class="text-bold">{{ stockTotals.totalBvValue.toFixed(2) }}</q-td>
+                          <q-td class="text-bold">
+                            {{ convert(stockTotals.totalDpValue.toFixed(2)) }}
+                          </q-td>
+                          <q-td class="text-bold">
+                            {{ stockTotals.totalBvValue.toFixed(2) }}
+                          </q-td>
                         </q-tr>
                       </template>
                     </q-table>
@@ -919,7 +964,14 @@
           </template>
           <template v-if="form.reportType === 'queriedSales'">
             <!-- Exporter -->
-            <reportExporter reportType="dailySales" :reportData="paginatedSales" />
+
+            <reportExporter
+              reportType="dailySales"
+              :reportData="paginatedSales"
+              :dpccode="form.dpccode"
+              :startDate="form.startDate"
+              :endDate="form.endDate"
+            />
 
             <!-- No Records Banner -->
             <div v-if="!paginatedSales.length" class="q-mt-lg">
@@ -1056,7 +1108,14 @@
           </template>
           <template v-if="form.reportType === 'bestCustomers'">
             <!-- Export -->
-            <reportExporter reportType="bestCustomers" :reportData="sortedCustomers" />
+
+            <reportExporter
+              reportType="bestCustomers"
+              :reportData="sortedCustomers"
+              :dpccode="form.dpccode"
+              :startDate="form.startDate"
+              :endDate="form.endDate"
+            />
 
             <!-- Empty State -->
             <div v-if="!sortedCustomers.length" class="q-mt-lg">

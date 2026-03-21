@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import {} from 'vue'
 import * as XLSX from 'xlsx'
 import dayjs from 'dayjs'
 import jsPDF from 'jspdf'
@@ -31,18 +31,21 @@ import { useAuth } from 'src/stores/auth'
 
 const auth = useAuth()
 
-const form = reactive({
-  startDate:
-    localStorage.getItem('reportStartDate') || dayjs().startOf('month').format('YYYY-MM-DD'),
-  endDate: localStorage.getItem('reportEndDate') || dayjs().endOf('month').format('YYYY-MM-DD'),
-  dpccode: localStorage.getItem('reportDpccode') || '',
-  shopName: '',
-})
+//const form = reactive({
+// startDate:
+//  localStorage.getItem('reportStartDate') || dayjs().startOf('month').format('YYYY-MM-DD'),
+// endDate: localStorage.getItem('reportEndDate') || dayjs().endOf('month').format('YYYY-MM-DD'),
+// dpccode: localStorage.getItem('reportDpccode') || '',
+// shopName: '',
+//})
 
 const props = defineProps({
   reportType: { type: String, required: true },
   reportData: { type: Array, required: true },
   extraInfo: { type: Object, default: () => ({}) },
+  dpccode: String,
+  startDate: String,
+  endDate: String,
 })
 
 const downloadExcel = () => {
@@ -52,8 +55,8 @@ const downloadExcel = () => {
   const header = [
     ['DYNAPHARM'],
     [props.reportType.toUpperCase()],
-    [`Period: ${form.startDate} - ${form.endDate}`],
-    [`DPC: ${(form.dpccode || '').toUpperCase()}`],
+    [`Period: ${props.startDate} - ${props.endDate}`],
+    [`DPC: ${(props.dpccode || '').toUpperCase()}`],
     [],
   ]
 
@@ -285,8 +288,8 @@ const downloadExcel = () => {
     const sheetData = [
       ['DYNAPHARM'],
       ['STOCK REPORT'],
-      [`Period: ${form.startDate} - ${form.endDate}`],
-      [`DPC: ${(form.dpccode || '').toUpperCase()}`],
+      [`Period: ${props.startDate} - ${props.endDate}`],
+      [`DPC: ${(props.dpccode || '').toUpperCase()}`],
       [],
       ['Product Code', 'Product Name', 'Qty', 'DP Value', 'BV Value'],
     ]
@@ -346,9 +349,9 @@ const downloadPDF = () => {
 
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
-  doc.text(`Period: ${form.startDate} - ${form.endDate}`, margin, 28)
+  doc.text(`Period: ${props.startDate} - ${props.endDate}`, margin, 28)
   doc.setTextColor(0, 0, 200)
-  doc.text(`DPC: ${(form.dpccode || '').toUpperCase()}`, margin, 39)
+  doc.text(`DPC: ${(props.dpccode || '').toUpperCase()}`, margin, 39)
   doc.setTextColor(0)
 
   // --- DAILY / PERSONAL ---
