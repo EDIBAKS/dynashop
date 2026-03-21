@@ -1,9 +1,6 @@
 <template>
-  <q-page class="flex flex-center q-pa-none">
-    <q-card
-      class="q-pa-sm bg-transparent"
-      style="max-width: 800px; width: 100%; border: 0; box-shadow: none"
-    >
+  <q-page class="q-pa-sm bg-transparent">
+    <q-card class="q-pa-sm bg-transparent responsive-card" style="border: 0; box-shadow: none">
       <!-- Header -->
       <q-card-section class="row justify-left">
         <div class="column items-end">
@@ -2519,5 +2516,25 @@ td {
 .custom-form ::v-deep(.q-field--outlined.q-field--focused .q-field__control) {
   border: 2px solid #0d47a1 !important; /* deep blue when focused */
   box-shadow: 0 0 4px rgba(13, 71, 161, 0.5); /* optional glow */
+}
+.responsive-card {
+  width: 100%;
+  max-width: 95vw; /* dynamic width */
+  margin: 0 auto;
+}
+
+/* Large screens */
+@media (min-width: 1600px) {
+  .responsive-card {
+    max-width: 1600px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .responsive-card {
+    max-width: 100%;
+    padding: 8px;
+  }
 }
 </style>

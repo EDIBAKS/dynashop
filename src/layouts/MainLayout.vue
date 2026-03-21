@@ -77,7 +77,7 @@
       <!-- Floating Buttons (INSIDE page, just below header, right corner) -->
       <div
         class="row items-center no-wrap"
-        style="position: fixed; top: 120px; right: 40px; z-index: 1000; gap: 8px"
+        style="position: fixed; top: 105px; right: 40px; z-index: 1000; gap: 8px"
       >
         <!-- Language Toggle with Label -->
         <div class="relative-position">

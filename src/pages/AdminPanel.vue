@@ -1,20 +1,8 @@
 <template>
   <q-page class="q-pa-sm bg-transparent flex flex-center">
-    <q-card
-      flat
-      bordered
-      class="bg-transparent q-pa-sm full-width"
-      style="max-width: 900px; width: 100%"
-    >
+    <q-card flat bordered class="bg-transparent q-pa-sm full-width responsive-card">
       <!-- Push tabs down & align width -->
-      <q-card-section
-        class="q-px-none"
-        style="
-          width: 100%;
-          max-width: 900px;
-          margin: 75px auto 8px auto; /* top | right | bottom | left */
-        "
-      >
+      <q-card-section class="q-px-none" style="width: 100%; margin: 75px auto 8px auto">
         <q-tabs
           v-model="tab"
           inline-label
@@ -46,6 +34,9 @@
               </q-item>
               <q-item clickable @click="tab = 'Promos'">
                 <q-item-section>Promos</q-item-section>
+              </q-item>
+              <q-item v-if="isAdmin || isSuperAdmin" clickable @click="tab = 'Expiries'">
+                <q-item-section>Expiries</q-item-section>
               </q-item>
               <q-item clickable @click="tab = 'gineology'">
                 <q-item-section>Gineology</q-item-section>
@@ -151,6 +142,10 @@
               <div class="text-h6">📊 Promotional GiveAway</div>
               <PromoReturns />
             </q-tab-panel>
+            <q-tab-panel name="Expiries">
+              <div class="text-h6">📊 Expiries WithDrawn</div>
+              <ExpiryReport />
+            </q-tab-panel>
             <q-tab-panel name="TotalDispatch">
               <div class="text-h6">📊Consolidated Dispatch</div>
               <CompactDispatch />
@@ -180,6 +175,7 @@ import ManagerLegs from 'src/components/ManagerLegs.vue'
 import PromoReturns from 'src/components/PromoReturns.vue'
 import CompactDispatch from 'src/components/CompactDispatch.vue'
 import GineologyTree from 'src/components/GineologyTree.vue'
+import ExpiryReport from 'src/components/ExpiryReport.vue'
 const auth = useAuth()
 const currentDate = ref('')
 const tab = ref('Dispatch')
@@ -241,5 +237,25 @@ onMounted(() => {
 .transparent-panel {
   background-color: transparent !important;
   box-shadow: none !important;
+}
+.responsive-card {
+  width: 100%;
+  max-width: 1400px; /* 👈 wider for desktop */
+  margin: 0 auto;
+}
+
+/* Ultra large screens */
+@media (min-width: 1600px) {
+  .responsive-card {
+    max-width: 1600px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .responsive-card {
+    max-width: 100%;
+    padding: 8px;
+  }
 }
 </style>
