@@ -88,7 +88,7 @@
 
             <!-- Reports Tab -->
             <q-tab-panel name="StockReport">
-              <div class="text-h6">📊 Reports</div>
+              <div class="text-h6">📊 Current Stock</div>
 
               <!-- 🔥 RADIO BUTTONS -->
               <div class="row q-gutter-md q-mt-md">
@@ -98,6 +98,7 @@
                     { label: 'List View', value: 'list' },
                     { label: 'Table View', value: 'table' },
                     { label: 'Per Shop', value: 'shop' },
+                    { label: 'Tracker', value: 'graphs' },
                   ]"
                   type="radio"
                   color="primary"
@@ -108,10 +109,11 @@
                 <stockMonitor v-if="displayMode === 'list'" />
                 <stockTable v-else-if="displayMode === 'table'" />
                 <shopView v-else-if="displayMode === 'shop'" />
+                <StockDashBoard v-else-if="displayMode === 'graphs'" />
               </div>
             </q-tab-panel>
             <q-tab-panel name="SalesReport">
-              <div class="text-h6">📊 Reports</div>
+              <div class="text-h6">📊 Sales Report</div>
 
               <!-- 🔥 RADIO BUTTONS -->
 
@@ -176,6 +178,7 @@ import PromoReturns from 'src/components/PromoReturns.vue'
 import CompactDispatch from 'src/components/CompactDispatch.vue'
 import GineologyTree from 'src/components/GineologyTree.vue'
 import ExpiryReport from 'src/components/ExpiryReport.vue'
+import StockDashBoard from 'src/components/StockDashBoard.vue'
 const auth = useAuth()
 const currentDate = ref('')
 const tab = ref('Dispatch')

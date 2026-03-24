@@ -313,9 +313,19 @@ async function buildStockPivot() {
         row[loc.label] = Number(qty) // ensure number
       })
 
+      locations.forEach((loc) => {
+        const qty = loc.stockMap.get(prod.productcode) ?? 0
+        const value = qty * (prod.distributorprice || 0)
+
+        row[loc.label] = qty
+        row[`${loc.label}_value`] = value
+      })
+
       // TotalProduct = sum only of location quantities
-      row.TotalProduct = locations.reduce((sum, loc) => {
-        return sum + (Number(row[loc.label]) || 0)
+      row.TotalValue = locations.reduce((sum, loc) => {
+        const qty = Number(row[loc.label]) || 0
+        const price = Number(prod.distributorprice) || 0
+        return sum + qty * price
       }, 0)
 
       // Round total to integer to remove decimals

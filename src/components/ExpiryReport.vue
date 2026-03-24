@@ -14,6 +14,10 @@
         <div class="col-12 col-md-4 flex flex-center">
           <q-btn label="Load Expiry Data" color="primary" @click="loadData" />
         </div>
+        <div class="q-mb-md">
+          <q-btn label="Export Excel" color="green" @click="exportToExcel" class="q-mr-sm" />
+          <q-btn label="Export PDF" color="red" @click="exportToPDF" />
+        </div>
       </div>
     </q-card>
 
@@ -66,6 +70,9 @@ const startDate = ref('')
 const endDate = ref('')
 const expiryData = ref([])
 const isSuperAdmin = computed(() => auth.userDetails?.role === 'SuperAdmin')
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
 // ✅ Use shop_name instead of shopcode
 const columns = [
   { name: 'shop_name', label: 'Shop', field: 'shop_name' },
@@ -249,6 +256,94 @@ const returnItem = async (row) => {
       color: 'negative',
     })
   }
+}
+
+const exportToExcel = () => {
+  const wb = XLSX.utils.book_new()
+  const ws_data = []
+
+  Object.keys(groupedData.value).forEach((productCode) => {
+    const group = groupedData.value[productCode]
+
+    // 🔹 Header
+    ws_data.push([`Product: ${group.productname} (${productCode})`, '', '', ''])
+
+    // 🔹 Totals
+    ws_data.push([
+      'Total Qty',
+      getTotalQty(group.items),
+      'Expiry Value',
+      getTotalValue(group.items, group.distributorprice),
+    ])
+
+    // 🔹 Table header
+    ws_data.push(['Shop', 'Qty', 'Expiry Date', 'Date Added', 'Modified By'])
+
+    // 🔹 Rows
+    group.items.forEach((item) => {
+      ws_data.push([
+        item.shop_name,
+        item.quantity,
+        item.expirydate,
+        item.dateadded,
+        item.modifiedby,
+      ])
+    })
+
+    // 🔹 Space between groups
+    ws_data.push([])
+  })
+
+  const ws = XLSX.utils.aoa_to_sheet(ws_data)
+  XLSX.utils.book_append_sheet(wb, ws, 'Expiry Report')
+
+  XLSX.writeFile(wb, 'Expiry_Report.xlsx')
+}
+
+const exportToPDF = () => {
+  const doc = new jsPDF()
+
+  let y = 10
+
+  Object.keys(groupedData.value).forEach((productCode) => {
+    const group = groupedData.value[productCode]
+
+    // 🔹 Title
+    doc.setFontSize(12)
+    doc.text(`${group.productname} (${productCode})`, 10, y)
+
+    y += 6
+
+    // 🔹 Totals
+    doc.setFontSize(10)
+    doc.text(
+      `Total Qty: ${getTotalQty(group.items)} | Expiry Value: ${getTotalValue(
+        group.items,
+        group.distributorprice,
+      ).toLocaleString()}`,
+      10,
+      y,
+    )
+
+    y += 4
+
+    // 🔹 Table
+    autoTable(doc, {
+      startY: y,
+      head: [['Shop', 'Qty', 'Expiry Date', 'Date Added', 'Modified By']],
+      body: group.items.map((item) => [
+        item.shop_name,
+        item.quantity,
+        item.expirydate,
+        item.dateadded,
+        item.modifiedby,
+      ]),
+    })
+
+    y = doc.lastAutoTable.finalY + 10
+  })
+
+  doc.save('Expiry_Report.pdf')
 }
 </script>
 <style scoped>
