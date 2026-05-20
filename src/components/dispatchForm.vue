@@ -165,16 +165,20 @@
     <!-- ===================== PRODUCT ADDITION FORM ===================== -->
     <q-separator spaced />
     <div v-if="isAdmin || isSuperAdmin" class="text-subtitle2 text-center q-my-md">
+      <!-- Select Province -->
+      <q-banner rounded dense class="bg-red-1 text-red-10 q-mb-sm">
+        <template v-slot:avatar>
+          <q-icon name="warning" color="red" />
+        </template>
+
+        <div class="text-bold">Used Only to Enter New Stock to MainStore</div>
+
+        <div class="text-caption">Not for Daily Use</div>
+      </q-banner>
       Add Product to Main Store / Province
     </div>
 
-    <q-form
-      v-if="isAdmin || isSuperAdmin"
-      @submit.prevent="submitProductAddition"
-      class="column q-gutter-md"
-    >
-      <!-- Select Province -->
-
+    <q-form v-if="isSuperAdmin" @submit.prevent="submitProductAddition" class="column q-gutter-md">
       <q-select
         v-model="newProduct.selectedProvince"
         :options="provinceOptions"

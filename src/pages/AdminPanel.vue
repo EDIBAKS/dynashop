@@ -144,6 +144,10 @@
               <div class="text-h6">📊 Promotional GiveAway</div>
               <PromoReturns />
             </q-tab-panel>
+            <q-tab-panel name="Debts">
+              <div class="text-h6">📊 Debts</div>
+              <DebtReport />
+            </q-tab-panel>
             <q-tab-panel name="Expiries">
               <div class="text-h6">📊 Expiries WithDrawn</div>
               <ExpiryReport />
@@ -175,6 +179,7 @@ import WithdrawReport from 'src/components/WithdrawReport.vue'
 import SalesReport from 'src/components/salesReport.vue'
 import ManagerLegs from 'src/components/ManagerLegs.vue'
 import PromoReturns from 'src/components/PromoReturns.vue'
+import DebtReport from 'src/components/DebtsReport.vue'
 import CompactDispatch from 'src/components/CompactDispatch.vue'
 import GineologyTree from 'src/components/GineologyTree.vue'
 import ExpiryReport from 'src/components/ExpiryReport.vue'
