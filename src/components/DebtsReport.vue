@@ -1,69 +1,260 @@
 <template>
-  <q-page class="q-pa-md">
-    <q-card flat class="q-pa-md" style="max-width: 1200px; margin: 0 auto">
+  <q-page class="q-pa-md bg-grey-2">
+    <q-card flat bordered class="debts-card">
       <!-- HEADER -->
-      <div class="text-h6 text-bold text-primary q-mb-md">Debts Report</div>
+      <div class="row items-center justify-between q-mb-lg">
+        <div>
+          <div class="text-h5 text-bold text-primary">Debts Report</div>
 
-      <!-- DATE FILTERS -->
-      <div class="row q-col-gutter-sm q-mb-md">
-        <div class="col">
-          <q-input v-model="startDate" type="date" label="Start Date" dense outlined />
+          <div class="text-caption text-grey">Filter and manage outstanding debts</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="text-caption text-grey q-mb-xs">Search By Name</div>
+
+          <DistributorSearch v-model="filterDistributor" v-model:name="filterDistributorName" />
         </div>
 
-        <div class="col">
-          <q-input v-model="endDate" type="date" label="End Date" dense outlined />
+        <q-btn
+          color="primary"
+          icon="refresh"
+          label="Refresh"
+          unelevated
+          :loading="loading"
+          @click="fetchDebts"
+        />
+      </div>
+
+      <!-- FILTER AREA -->
+      <q-card flat bordered class="q-pa-md filter-card q-mb-lg">
+        <!-- TOP FILTERS -->
+        <div class="row q-col-gutter-md items-start">
+          <!-- START DATE -->
+          <div class="col-12 col-md-2">
+            <q-input v-model="startDate" type="date" label="Start Date" dense outlined />
+          </div>
+
+          <!-- END DATE -->
+          <div class="col-12 col-md-2">
+            <q-input v-model="endDate" type="date" label="End Date" dense outlined />
+          </div>
+
+          <div class="col-12 col-md-2">
+            <q-select
+              v-model="sortBy"
+              :options="sortOptions"
+              label="Sort By"
+              dense
+              outlined
+              emit-value
+              map-options
+            />
+          </div>
+
+          <!-- PRODUCT -->
+          <!-- PRODUCT NAME SEARCH -->
+
+          <!-- 
+           <div class="col-12 col-md-4">
+            <q-input
+              v-model="productSearchText"
+              label="Search Product Name"
+              dense
+              outlined
+              clearable
+              debounce="300"
+              placeholder="Type product name..."
+            >
+              <template #prepend>
+                <q-icon name="search" />
+              </template>
+            </q-input>
+          </div> 
+        -->
+
+          <!-- SHOP -->
+          <div class="col-12 col-md-3">
+            <q-select
+              v-model="selectedShopCode"
+              :options="shops"
+              option-label="dpcname"
+              option-value="dpccode"
+              emit-value
+              map-options
+              clearable
+              dense
+              outlined
+              label="Select Shop"
+            />
+          </div>
+          <div class="col-12 col-md-2">
+            <q-btn
+              color="primary"
+              icon="search"
+              label="Apply"
+              unelevated
+              class="full-width filter-btn"
+              @click="fetchDebts"
+            />
+          </div>
+
+          <!-- REFRESH -->
         </div>
 
-        <div class="col-auto flex flex-center">
-          <q-btn color="primary" label="Refresh" @click="fetchDebts" />
+        <!-- SECOND ROW -->
+        <!-- SECOND ROW -->
+        <div class="row q-col-gutter-md items-start q-mt-sm">
+          <!-- DISTRIBUTOR -->
+
+          <!-- PRODUCT NAME SEARCH -->
+          <div class="col-12 col-md-4">
+            <q-input
+              v-model="productSearchText"
+              label="Search Product Name"
+              dense
+              outlined
+              clearable
+              debounce="300"
+              placeholder="Type product name..."
+            >
+              <template #prepend>
+                <q-icon name="search" />
+              </template>
+            </q-input>
+          </div>
+
+          <!-- SORT -->
+
+          <!-- CLEAR -->
+          <div class="col-12 col-md-8">
+            <div class="row items-center no-wrap q-gutter-sm">
+              <q-btn
+                flat
+                color="negative"
+                icon="clear"
+                label="Clear Filters"
+                class="filter-btn"
+                @click="clearFilters"
+              />
+
+              <q-btn
+                color="green"
+                icon="table_view"
+                label="Excel"
+                unelevated
+                @click="exportToExcel"
+              />
+
+              <q-btn
+                color="red"
+                icon="picture_as_pdf"
+                label="PDF"
+                unelevated
+                @click="exportToPDF"
+              />
+            </div>
+          </div>
+        </div>
+      </q-card>
+
+      <!-- SUMMARY -->
+      <div class="row q-col-gutter-md q-mb-lg">
+        <div class="col-12 col-md-4">
+          <q-card flat bordered class="summary-card">
+            <q-card-section>
+              <div class="text-caption text-grey">Total Debt Rows</div>
+
+              <div class="text-h5 text-bold">
+                {{ filteredDebts.length }}
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <q-card flat bordered class="summary-card">
+            <q-card-section>
+              <div class="text-caption text-grey">Total Quantity Owed</div>
+
+              <div class="text-h5 text-bold">
+                {{ totalQuantity }}
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+
+        <div class="col-12 col-md-4">
+          <q-card flat bordered class="summary-card">
+            <q-card-section>
+              <div class="text-caption text-grey">Groups</div>
+
+              <div class="text-h5 text-bold">
+                {{ debtsByGroup.length }}
+              </div>
+            </q-card-section>
+          </q-card>
         </div>
       </div>
 
-      <!-- GROUPED DEBTS -->
-      <div v-if="debtsByGroup.length">
-        <div v-for="group in debtsByGroup" :key="group.key" class="q-mb-lg">
-          <!-- GROUP HEADER -->
-          <div class="bg-primary text-white q-pa-sm rounded-borders">
-            <div class="text-bold">Shop: {{ group.shopcode }}</div>
+      <!-- LOADING -->
+      <div v-if="loading" class="text-center q-py-xl">
+        <q-spinner color="primary" size="50px" />
+      </div>
 
-            <div class="text-caption">Date: {{ group.date }}</div>
+      <!-- RESULTS -->
+      <div v-else-if="debtsByGroup.length">
+        <div v-for="group in debtsByGroup" :key="group.key" class="q-mb-xl">
+          <!-- GROUP HEADER -->
+          <div class="group-header">
+            <div>
+              <div class="text-subtitle1 text-bold">
+                {{ group.shopcode }}
+              </div>
+
+              <div class="text-caption">
+                {{ group.date }}
+              </div>
+            </div>
+
+            <q-badge color="white" text-color="primary" :label="`${group.rows.length} Items`" />
           </div>
 
-          <!-- LIST -->
-          <q-list bordered separator class="bg-grey-1">
+          <!-- ROWS -->
+          <q-list bordered separator>
             <q-item v-for="row in group.rows" :key="row.id">
               <q-item-section>
                 <div class="text-subtitle2 text-bold">
-                  {{ row.productcode }} - {{ row.productname }}
+                  {{ row.productcode }}
                 </div>
 
-                <div class="row items-center q-gutter-sm q-mt-xs">
-                  <q-avatar size="35px" class="bg-black text-white">
-                    {{ row.quantity }}
-                  </q-avatar>
-
-                  <div class="text-caption">Qty Owed</div>
+                <div class="text-body2">
+                  {{ row.productname }}
                 </div>
 
-                <div class="text-caption q-mt-xs">
-                  Distributor:
-                  {{ row.distributorname }}
+                <div class="row q-col-gutter-sm q-mt-sm">
+                  <div class="col-auto">
+                    <q-chip dense color="black" text-color="white">
+                      Qty: {{ row.quantity }}
+                    </q-chip>
+                  </div>
+
+                  <div class="col-auto">
+                    <q-chip dense color="primary" text-color="white">
+                      {{ row.distributorname }}
+                    </q-chip>
+                  </div>
                 </div>
 
-                <div class="text-caption">
-                  Added By:
-                  {{ row.addedby }}
-                </div>
+                <div class="text-caption text-grey q-mt-sm">Added By: {{ row.addedby }}</div>
               </q-item-section>
 
-              <!-- PAY DEBT -->
+              <!-- ACTION -->
               <q-item-section side top>
                 <q-btn
                   color="green"
                   icon="payments"
                   label="Pay Debt"
-                  dense
-                  :loading="loading"
+                  unelevated
+                  :loading="processingId === row.id"
                   @click="confirmDebtClear(row)"
                 />
               </q-item-section>
@@ -73,7 +264,7 @@
       </div>
 
       <!-- EMPTY -->
-      <div v-else class="text-center text-grey q-mt-xl">No debts found.</div>
+      <div v-else class="text-center text-grey q-py-xl">No debts found</div>
     </q-card>
   </q-page>
 </template>
@@ -83,26 +274,106 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from 'boot/supabase'
 import { useQuasar } from 'quasar'
 
+import DistributorSearch from 'components/DistributorSearch.vue'
+//import ProductSearch from 'components/ProductSearch.vue'
+//import ShopSearch from 'components/ShopSearch.vue'
+
 const $q = useQuasar()
 
 const debts = ref([])
+const products = ref([])
+import { useAuth } from 'stores/auth'
+const auth = useAuth()
+const currentUser = computed(() => {
+  console.log('AUTH DETAILS', auth.userDetails)
+
+  return (
+    auth.userDetails?.firstname ||
+    auth.userDetails?.firstName ||
+    auth.user?.user_metadata?.firstname ||
+    auth.user?.email ||
+    'Unknown User'
+  )
+})
 const loading = ref(false)
+const processingId = ref(null)
+
 const productsMap = ref({})
 
 const startDate = ref(new Date().toISOString().split('T')[0])
 
 const endDate = ref(new Date().toISOString().split('T')[0])
 
+const shops = ref([])
+
+import * as XLSX from 'xlsx'
+
+import jsPDF from 'jspdf'
+
+import autoTable from 'jspdf-autotable'
+
+const selectedShopCode = ref('')
+
+// FILTERS
+const filterProduct = ref('')
+const filterProductName = ref('')
+
+const filterShop = ref('')
+const filterShopName = ref('')
+
+const filterDistributor = ref('')
+const filterDistributorName = ref('')
+const productSearchText = ref('')
+// SORT
+const sortBy = ref('date_desc')
+
+const sortOptions = [
+  {
+    label: 'Date Descending',
+    value: 'date_desc',
+  },
+  {
+    label: 'Date Ascending',
+    value: 'date_asc',
+  },
+  {
+    label: 'Product Code',
+    value: 'productcode',
+  },
+  {
+    label: 'Shop Code',
+    value: 'shopcode',
+  },
+  {
+    label: 'Distributor',
+    value: 'distributor',
+  },
+]
+
 // FETCH PRODUCTS
 async function fetchProducts() {
-  const { data, error } = await supabase.from('products').select('productcode, productname')
+  const { data, error } = await supabase
+    .from('products')
+    .select(
+      `
+      productcode,
+      productname
+    `,
+    )
+    .order('productname')
 
-  if (!error) {
-    productsMap.value = data.reduce((acc, p) => {
-      acc[p.productcode] = p
-      return acc
-    }, {})
+  if (error) {
+    console.error(error)
+    return
   }
+
+  products.value = data || []
+
+  productsMap.value = data.reduce((acc, p) => {
+    acc[p.productcode] = p
+
+    return acc
+  }, {})
 }
 
 // FETCH DEBTS
@@ -110,11 +381,9 @@ async function fetchDebts() {
   loading.value = true
 
   try {
-    let query = supabase
-      .from('debts')
-      .select('*')
-      .order('date', { ascending: false })
-      .order('shopcode', { ascending: true })
+    let query = supabase.from('debts').select('*').order('date', {
+      ascending: false,
+    })
 
     if (startDate.value) {
       query = query.gte('date', startDate.value)
@@ -128,7 +397,7 @@ async function fetchDebts() {
 
     if (error) throw error
 
-    debts.value = data.map((d) => ({
+    debts.value = (data || []).map((d) => ({
       ...d,
       productname: productsMap.value[d.productcode]?.productname || d.productcode,
     }))
@@ -144,11 +413,68 @@ async function fetchDebts() {
   }
 }
 
-// GROUP BY SHOP + DATE
+// FILTERED
+const filteredDebts = computed(() => {
+  let filtered = [...debts.value]
+
+  // PRODUCT CODE FILTER
+  if (filterProduct.value) {
+    filtered = filtered.filter((d) => d.productcode === filterProduct.value)
+  }
+
+  // PRODUCT NAME SEARCH
+  if (productSearchText.value) {
+    const search = productSearchText.value.toLowerCase().trim()
+
+    filtered = filtered.filter((d) => (d.productname || '').toLowerCase().includes(search))
+  }
+
+  // SHOP FILTER
+  if (selectedShopCode.value) {
+    const fullShopCode = `${selectedShopCode.value}_STOCK`
+
+    filtered = filtered.filter((d) => d.shopcode === fullShopCode)
+  }
+
+  // DISTRIBUTOR FILTER
+  if (filterDistributor.value) {
+    filtered = filtered.filter((d) => d.distributoridno === filterDistributor.value)
+  }
+
+  // SORTING
+  switch (sortBy.value) {
+    case 'date_asc':
+      filtered.sort((a, b) => new Date(a.date) - new Date(b.date))
+      break
+
+    case 'date_desc':
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date))
+      break
+
+    case 'productcode':
+      filtered.sort((a, b) => (a.productcode || '').localeCompare(b.productcode || ''))
+      break
+
+    case 'shopcode':
+      filtered.sort((a, b) => (a.shopcode || '').localeCompare(b.shopcode || ''))
+      break
+
+    case 'distributor':
+      filtered.sort((a, b) => (a.distributorname || '').localeCompare(b.distributorname || ''))
+      break
+
+    case 'productname':
+      filtered.sort((a, b) => (a.productname || '').localeCompare(b.productname || ''))
+      break
+  }
+
+  return filtered
+})
+// GROUPING
 const debtsByGroup = computed(() => {
   const grouped = {}
 
-  debts.value.forEach((d) => {
+  filteredDebts.value.forEach((d) => {
     const key = `${d.shopcode}_${d.date}`
 
     if (!grouped[key]) {
@@ -166,14 +492,30 @@ const debtsByGroup = computed(() => {
   return Object.values(grouped)
 })
 
+// TOTAL
+const totalQuantity = computed(() => {
+  return filteredDebts.value.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+})
+
+// CLEAR FILTERS
+function clearFilters() {
+  filterProduct.value = ''
+  filterProductName.value = ''
+
+  filterShop.value = ''
+  filterShopName.value = ''
+
+  filterDistributor.value = ''
+  filterDistributorName.value = ''
+
+  sortBy.value = 'date_desc'
+}
+
 // CONFIRM
 function confirmDebtClear(row) {
   $q.dialog({
     title: 'Confirm Debt Payment',
-    message: `
-      Return ${row.quantity} × ${row.productname}
-      back to stock and remove this debt?
-    `,
+    message: `Return ${row.quantity} × ` + `${row.productname} back to stock?`,
     cancel: true,
     persistent: true,
   }).onOk(() => {
@@ -183,12 +525,7 @@ function confirmDebtClear(row) {
 
 // PROCESS
 async function processDebtClear(row) {
-  const dismiss = $q.notify({
-    spinner: true,
-    timeout: 0,
-    color: 'info',
-    message: 'Processing debt payment...',
-  })
+  processingId.value = row.id
 
   try {
     const { error } = await supabase.rpc('clear_debt_and_return_stock', {
@@ -200,31 +537,149 @@ async function processDebtClear(row) {
 
     if (error) throw error
 
-    // REMOVE FROM UI
     debts.value = debts.value.filter((d) => d.id !== row.id)
-
-    dismiss()
 
     $q.notify({
       type: 'positive',
-      timeout: 7000,
-      message: 'Debt paid successfully. Please go to Sales and make a receipt for the paid debt.',
+      message: 'Debt paid successfully.',
     })
   } catch (err) {
-    dismiss()
-
     console.error(err)
 
     $q.notify({
       type: 'negative',
       message: err.message || 'Failed to process debt payment.',
     })
+  } finally {
+    processingId.value = null
   }
+}
+
+async function fetchShops() {
+  const { data, error } = await supabase
+    .from('dpc')
+    .select(
+      `
+      dpccode,
+      dpcname
+    `,
+    )
+    .eq('enabled', true)
+    .order('dpcname')
+
+  if (error) {
+    console.error(error)
+
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to load shops',
+    })
+
+    return
+  }
+
+  shops.value = data || []
+}
+
+function exportToExcel() {
+  const rows = filteredDebts.value.map((d) => ({
+    Date: d.date,
+    ShopCode: d.shopcode,
+    ProductCode: d.productcode,
+    ProductName: d.productname,
+    Quantity: d.quantity,
+    Distributor: d.distributorname,
+  }))
+
+  const worksheet = XLSX.utils.json_to_sheet(rows)
+
+  const workbook = XLSX.utils.book_new()
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Outstanding Debts')
+
+  XLSX.writeFile(workbook, `Outstanding_Debt_Report_${Date.now()}.xlsx`)
+}
+
+function exportToPDF() {
+  const doc = new jsPDF('landscape')
+
+  const now = new Date()
+
+  doc.setFontSize(18)
+
+  doc.text('Outstanding Debt Report', 14, 20)
+
+  doc.setFontSize(10)
+
+  doc.text(`Printed By: ${String(currentUser.value)}`, 14, 30)
+
+  doc.text(`Printed On: ${now.toLocaleString()}`, 14, 36)
+
+  const tableData = filteredDebts.value.map((d) => [
+    d.date,
+    d.shopcode,
+    d.productcode,
+    d.productname,
+    d.quantity,
+    d.distributorname,
+  ])
+
+  autoTable(doc, {
+    startY: 45,
+
+    head: [['Date', 'Shop Code', 'Product Code', 'Product Name', 'Quantity', 'Distributor']],
+
+    body: tableData,
+
+    styles: {
+      fontSize: 9,
+    },
+
+    headStyles: {
+      fillColor: [25, 118, 210],
+    },
+  })
+
+  doc.save(`Outstanding_Debt_Report_${Date.now()}.pdf`)
 }
 
 // LOAD
 onMounted(async () => {
   await fetchProducts()
+  await fetchShops()
   await fetchDebts()
 })
 </script>
+
+<style scoped>
+.debts-card {
+  max-width: 1350px;
+  margin: 0 auto;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.filter-card {
+  border-radius: 14px;
+  background: white;
+}
+
+.filter-btn {
+  height: 40px;
+}
+
+.group-header {
+  background: #1976d2;
+  color: white;
+  padding: 14px;
+  border-radius: 10px 10px 0 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-card {
+  border-radius: 14px;
+}
+</style>
