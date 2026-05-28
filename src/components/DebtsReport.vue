@@ -2,7 +2,7 @@
   <q-page class="q-pa-md bg-grey-2">
     <q-card flat bordered class="debts-card">
       <!-- HEADER -->
-      <div class="row items-center justify-between q-mb-lg">
+      <div class="row q-col-gutter-md q-mb-lg">
         <div>
           <div class="text-h5 text-bold text-primary">Debts Report</div>
 
@@ -14,14 +14,16 @@
           <DistributorSearch v-model="filterDistributor" v-model:name="filterDistributorName" />
         </div>
 
-        <q-btn
-          color="primary"
-          icon="refresh"
-          label="Refresh"
-          unelevated
-          :loading="loading"
-          @click="fetchDebts"
-        />
+        <div class="col-auto self-end">
+          <q-btn
+            color="primary"
+            icon="refresh"
+            label="Refresh"
+            unelevated
+            :loading="loading"
+            @click="fetchDebts"
+          />
+        </div>
       </div>
 
       <!-- FILTER AREA -->
@@ -185,10 +187,15 @@
         <div class="col-12 col-md-4">
           <q-card flat bordered class="summary-card">
             <q-card-section>
-              <div class="text-caption text-grey">Groups</div>
+              <div class="text-caption text-grey">Total Debt Value</div>
 
-              <div class="text-h5 text-bold">
-                {{ debtsByGroup.length }}
+              <div class="text-h5 text-bold text-negative">
+                {{
+                  new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                  }).format(totalDebtValue)
+                }}
               </div>
             </q-card-section>
           </q-card>
@@ -236,6 +243,17 @@
                       Qty: {{ row.quantity }}
                     </q-chip>
                   </div>
+                  <div class="col-auto">
+                    <q-chip dense color="negative" text-color="white">
+                      Value:
+                      {{
+                        new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                        }).format(row.debtvalue || 0)
+                      }}
+                    </q-chip>
+                  </div>
 
                   <div class="col-auto">
                     <q-chip dense color="primary" text-color="white">
@@ -265,6 +283,50 @@
 
       <!-- EMPTY -->
       <div v-else class="text-center text-grey q-py-xl">No debts found</div>
+      <!-- PRODUCT TALLY -->
+      <q-card v-if="productTally.length" flat bordered class="q-mt-xl tally-card">
+        <q-card-section class="bg-primary text-white">
+          <div class="text-h6 text-bold">Product Debt Tally</div>
+
+          <div class="text-caption">Consolidated product totals</div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-table
+          flat
+          :rows="productTally"
+          :columns="tallyColumns"
+          row-key="productcode"
+          dense
+          :pagination="{ rowsPerPage: 0 }"
+        >
+          <template #body-cell-totalvalue="props">
+            <q-td :props="props">
+              {{
+                new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                }).format(props.row.totalvalue)
+              }}
+            </q-td>
+          </template>
+
+          <template #bottom>
+            <div class="full-width row justify-end q-pa-md">
+              <div class="text-subtitle1 text-bold text-negative">
+                Grand Total:
+                {{
+                  new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                  }).format(totalDebtValue)
+                }}
+              </div>
+            </div>
+          </template>
+        </q-table>
+      </q-card>
     </q-card>
   </q-page>
 </template>
@@ -350,6 +412,36 @@ const sortOptions = [
   },
 ]
 
+const tallyColumns = [
+  {
+    name: 'productcode',
+    label: 'Product Code',
+    field: 'productcode',
+    align: 'left',
+  },
+
+  {
+    name: 'productname',
+    label: 'Product Name',
+    field: 'productname',
+    align: 'left',
+  },
+
+  {
+    name: 'totalquantity',
+    label: 'Total Quantity',
+    field: 'totalquantity',
+    align: 'right',
+  },
+
+  {
+    name: 'totalvalue',
+    label: 'Total Value',
+    field: 'totalvalue',
+    align: 'right',
+  },
+]
+
 // FETCH PRODUCTS
 async function fetchProducts() {
   const { data, error } = await supabase
@@ -357,7 +449,8 @@ async function fetchProducts() {
     .select(
       `
       productcode,
-      productname
+      productname,
+      distributorprice
     `,
     )
     .order('productname')
@@ -397,10 +490,22 @@ async function fetchDebts() {
 
     if (error) throw error
 
-    debts.value = (data || []).map((d) => ({
-      ...d,
-      productname: productsMap.value[d.productcode]?.productname || d.productcode,
-    }))
+    debts.value = (data || []).map((d) => {
+      const product = productsMap.value[d.productcode] || {}
+
+      const distributorprice = Number(product.distributorprice || 0)
+      const quantity = Number(d.quantity || 0)
+
+      return {
+        ...d,
+
+        productname: product.productname || d.productcode,
+
+        distributorprice,
+
+        debtvalue: distributorprice * quantity,
+      }
+    })
   } catch (err) {
     console.error(err)
 
@@ -497,6 +602,35 @@ const totalQuantity = computed(() => {
   return filteredDebts.value.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
 })
 
+const totalDebtValue = computed(() => {
+  return filteredDebts.value.reduce((sum, row) => {
+    return sum + Number(row.debtvalue || 0)
+  }, 0)
+})
+
+const productTally = computed(() => {
+  const grouped = {}
+
+  filteredDebts.value.forEach((row) => {
+    const key = row.productcode
+
+    if (!grouped[key]) {
+      grouped[key] = {
+        productcode: row.productcode,
+        productname: row.productname,
+        totalquantity: 0,
+        totalvalue: 0,
+      }
+    }
+
+    grouped[key].totalquantity += Number(row.quantity || 0)
+
+    grouped[key].totalvalue += Number(row.debtvalue || 0)
+  })
+
+  return Object.values(grouped).sort((a, b) => a.productname.localeCompare(b.productname))
+})
+
 // CLEAR FILTERS
 function clearFilters() {
   filterProduct.value = ''
@@ -582,21 +716,54 @@ async function fetchShops() {
 }
 
 function exportToExcel() {
-  const rows = filteredDebts.value.map((d) => ({
+  // =========================
+  // DETAILED SHEET
+  // =========================
+  const detailedRows = filteredDebts.value.map((d) => ({
     Date: d.date,
     ShopCode: d.shopcode,
     ProductCode: d.productcode,
     ProductName: d.productname,
     Quantity: d.quantity,
+    DistributorPrice: d.distributorprice,
+    DebtValue: d.debtvalue,
     Distributor: d.distributorname,
   }))
 
-  const worksheet = XLSX.utils.json_to_sheet(rows)
+  // =========================
+  // TALLY SHEET
+  // =========================
+  const tallyRows = productTally.value.map((p) => ({
+    ProductCode: p.productcode,
+    ProductName: p.productname,
+    TotalQuantity: p.totalquantity,
+    TotalValue: p.totalvalue,
+  }))
 
+  // ADD GRAND TOTAL ROW
+  tallyRows.push({})
+
+  tallyRows.push({
+    ProductName: 'GRAND TOTAL',
+    TotalValue: totalDebtValue.value,
+  })
+
+  // =========================
+  // CREATE WORKBOOK
+  // =========================
   const workbook = XLSX.utils.book_new()
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Outstanding Debts')
+  // DETAILS SHEET
+  const detailSheet = XLSX.utils.json_to_sheet(detailedRows)
 
+  XLSX.utils.book_append_sheet(workbook, detailSheet, 'Outstanding Debts')
+
+  // TALLY SHEET
+  const tallySheet = XLSX.utils.json_to_sheet(tallyRows)
+
+  XLSX.utils.book_append_sheet(workbook, tallySheet, 'Product Tally')
+
+  // EXPORT
   XLSX.writeFile(workbook, `Outstanding_Debt_Report_${Date.now()}.xlsx`)
 }
 
@@ -605,6 +772,9 @@ function exportToPDF() {
 
   const now = new Date()
 
+  // =========================
+  // HEADER
+  // =========================
   doc.setFontSize(18)
 
   doc.text('Outstanding Debt Report', 14, 20)
@@ -615,24 +785,40 @@ function exportToPDF() {
 
   doc.text(`Printed On: ${now.toLocaleString()}`, 14, 36)
 
+  // =========================
+  // MAIN DETAIL TABLE
+  // =========================
   const tableData = filteredDebts.value.map((d) => [
     d.date,
     d.shopcode,
     d.productcode,
     d.productname,
     d.quantity,
+    d.distributorprice,
+    d.debtvalue,
     d.distributorname,
   ])
 
   autoTable(doc, {
     startY: 45,
 
-    head: [['Date', 'Shop Code', 'Product Code', 'Product Name', 'Quantity', 'Distributor']],
+    head: [
+      [
+        'Date',
+        'Shop Code',
+        'Product Code',
+        'Product Name',
+        'Quantity',
+        'Unit Price',
+        'Debt Value',
+        'Distributor',
+      ],
+    ],
 
     body: tableData,
 
     styles: {
-      fontSize: 9,
+      fontSize: 8,
     },
 
     headStyles: {
@@ -640,6 +826,63 @@ function exportToPDF() {
     },
   })
 
+  // =========================
+  // PRODUCT TALLY TITLE
+  // =========================
+  let tallyStartY = doc.lastAutoTable.finalY + 15
+
+  doc.setFontSize(14)
+
+  doc.text('Product Debt Tally', 14, tallyStartY)
+
+  // =========================
+  // PRODUCT TALLY TABLE
+  // =========================
+  const tallyData = productTally.value.map((p) => [
+    p.productcode,
+    p.productname,
+    p.totalquantity,
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(p.totalvalue),
+  ])
+
+  autoTable(doc, {
+    startY: tallyStartY + 5,
+
+    head: [['Product Code', 'Product Name', 'Total Quantity', 'Total Value']],
+
+    body: tallyData,
+
+    styles: {
+      fontSize: 9,
+    },
+
+    headStyles: {
+      fillColor: [46, 125, 50],
+    },
+  })
+
+  // =========================
+  // GRAND TOTAL
+  // =========================
+  const grandTotalY = doc.lastAutoTable.finalY + 12
+
+  doc.setFontSize(13)
+
+  doc.text(
+    `Grand Total Debt Value: ${new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(totalDebtValue.value)}`,
+    14,
+    grandTotalY,
+  )
+
+  // =========================
+  // SAVE
+  // =========================
   doc.save(`Outstanding_Debt_Report_${Date.now()}.pdf`)
 }
 
@@ -681,5 +924,9 @@ onMounted(async () => {
 
 .summary-card {
   border-radius: 14px;
+}
+.tally-card {
+  border-radius: 14px;
+  overflow: hidden;
 }
 </style>
